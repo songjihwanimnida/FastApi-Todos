@@ -177,7 +177,7 @@
   <main class="main">
     <div class="content">
       <div class="page-title">
-        <h1 id="view-title">인박스</h1>
+        <h1 id="view-title">미완료</h1>
         <span class="count" id="view-count"></span>
       </div>
       <div id="list-area" aria-live="polite"></div>
@@ -224,7 +224,7 @@ function icon(path, size = 18) {
 }
 
 const ICONS = {
-  inbox: '<path d="M4 4h16v10h-5a3 3 0 0 1-6 0H4z"/><path d="M4 14v6h16v-6"/>',
+  open: '<circle cx="12" cy="12" r="8"/>',
   all: '<path d="M4 6h16M4 12h16M4 18h16"/>',
   done: '<path d="M20 6 9 17l-5-5"/>',
   check: '<path d="M20 6 9 17l-5-5"/>',
@@ -235,11 +235,11 @@ const ICONS = {
 
 const VIEWS = {
   inbox: {
-    title: "인박스", icon: ICONS.inbox, filter: (t) => !t.completed,
+    title: "미완료", icon: ICONS.open, filter: (t) => !t.completed,
     empty: { h: "할 일을 모두 마쳤습니다", p: "아래에서 새 할 일을 추가해 보세요." },
   },
   all: {
-    title: "전체", icon: ICONS.all, filter: () => true,
+    title: "전체(완료 포함)", icon: ICONS.all, filter: () => true,
     empty: { h: "할 일이 없습니다", p: "추가한 할 일이 여기에 모두 표시됩니다." },
   },
   done: {
