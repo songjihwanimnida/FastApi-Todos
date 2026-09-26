@@ -19,6 +19,7 @@ class TodoIn(BaseModel):                         # 클라이언트가 보내는 
     title: str = Field(min_length=1, max_length=100)
     description: str = ""
     completed: bool = False
+    priority: int = Field(default=4, ge=1, le=4)  # 1 이 가장 높다
 
 
 class TodoItem(TodoIn):                          # 서버가 돌려주는 데이터 (id 있음)
