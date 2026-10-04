@@ -62,6 +62,25 @@ def test_create_without_title_returns_422(client):
     assert response.json()["detail"][0]["loc"] == ["body", "title"]
 
 
+@pytest.mark.parametrize("payload", [
+    {"title": "   "},                                     # 공백만 있는 제목
+    {"title": "[통합 테스트] 타입", "priority": "2"},       # 문자열 → 정수 자동 변환 안 함
+])
+def test_invalid_payload_returns_422(client, created_ids, payload):  # v4.0.0
+    response = client.post("/todos", json=payload)
+    if response.status_code == 201:                      # 잘못 저장됐다면 운영 데이터에서 지운다
+        created_ids.append(response.json()["id"])
+    assert response.status_code == 422
+
+
+def test_deleted_id_is_not_reused(client, created_ids):  # v4.0.0: 지운 id 를 다시 쓰지 않음
+    first = client.post("/todos", json={"title": "[통합 테스트] 첫 번째"}).json()["id"]
+    assert client.delete(f"/todos/{first}").status_code == 204
+    second = client.post("/todos", json={"title": "[통합 테스트] 두 번째"}).json()["id"]
+    created_ids.append(second)
+    assert second > first
+
+
 def test_delete_missing_id_returns_404(client):
     missing_id = max(todo_ids(client), default=0) + 1
     response = client.delete(f"/todos/{missing_id}")

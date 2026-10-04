@@ -1,0 +1,3 @@
+# UI 테스트 전용 (Docker 이미지에는 넣지 않는다) — pip install -r requirements.txt -r requirements-ui.txt
+selenium>=4.50.0          # chromedriver 는 Selenium Manager 가 자동으로 받는다
+pytest-playwright>=0.9.0  # playwright 1.63 포함, 설치된 Chrome 을 그대로 사용

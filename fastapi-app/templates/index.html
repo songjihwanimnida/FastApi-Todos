@@ -4,6 +4,7 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>Todo</title>
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><circle cx='12' cy='12' r='11' fill='%23dc4c3e'/><path d='m7 12.5 3.2 3.2L17 9' fill='none' stroke='white' stroke-width='2.4' stroke-linecap='round' stroke-linejoin='round'/></svg>">
 <style>
   :root {
     --accent: #dc4c3e;
@@ -169,6 +170,11 @@
   @media (max-width: 767px) {
     .main { padding: 52px 16px 96px; }
   }
+  /* 터치 기기·좁은 화면에는 hover 가 없다 → 편집·삭제 버튼을 늘 보이고 누르기 쉽게 44×44px 로 */
+  @media (hover: none), (max-width: 767px) {
+    .task-actions { opacity: 1; }
+    .icon-btn { padding: 14px; margin: -9px 0; }   /* 음수 margin 으로 행 높이는 그대로 */
+  }
 </style>
 </head>
 <body>
@@ -244,7 +250,8 @@ const PRIORITIES = [1, 2, 3, 4];                  // 1 이 가장 높다
 const PRIORITY_HINT = { 1: " (가장 높음)", 4: " (기본)" };
 const byPriority = (a, b) => a.priority - b.priority || a.id - b.id;
 
-const state = { todos: [], editingId: null, adding: false, loading: true, failed: false, busy: false, doneOpen: false };
+// focus: 다시 그린 뒤 포커스를 돌려줄 버튼의 data-focus 값 ("check-3", "edit-3", "add")
+const state = { todos: [], editingId: null, adding: false, loading: true, failed: false, busy: false, doneOpen: false, focus: null };
 
 /* ---------- 서버 통신 ---------- */
 async function api(url, method = "GET", body) {
@@ -291,7 +298,19 @@ async function load() {
 }
 
 /* ---------- 렌더링 ---------- */
-function render() { renderProgress(); renderList(); renderAdder(); }
+function render() {
+  renderProgress(); renderList(); renderAdder();
+  if (state.focus) queueMicrotask(restoreFocus);  // 편집 카드의 자동 포커스(microtask)보다 나중에 실행
+}
+
+// 목록을 새로 그리면 누른 버튼이 사라져 포커스가 body 로 빠진다 → 같은 자리로 돌려준다
+function restoreFocus() {
+  const target = document.querySelector(`[data-focus="${state.focus}"]`);
+  state.focus = null;
+  if (!target) return;
+  const closed = target.closest("details:not([open])");   // 접힌 "완료됨" 안이면 섹션 제목으로
+  (closed ? closed.querySelector("summary") : target).focus();
+}
 
 function renderProgress() {
   const total = state.todos.length;
@@ -366,10 +385,10 @@ function taskRow(todo) {
       description: todo.description,
       priority: todo.priority,
       submitLabel: "저장",
-      onCancel: () => { state.editingId = null; render(); },
+      onCancel: () => { state.editingId = null; state.focus = `edit-${todo.id}`; render(); },
       onSubmit: async (values) => {
         const ok = await run("수정", () => api(`/todos/${todo.id}`, "PUT", { ...todo, ...values, completed: todo.completed }));
-        if (ok) { state.editingId = null; await load(); }
+        if (ok) { state.editingId = null; state.focus = `edit-${todo.id}`; await load(); }
         return ok;
       },
     }));
@@ -377,6 +396,7 @@ function taskRow(todo) {
 
   const check = make("button", { className: "check", type: "button", role: "checkbox" }, icon(ICONS.check, 14));
   check.dataset.priority = String(todo.priority);
+  check.dataset.focus = `check-${todo.id}`;
   check.setAttribute("aria-checked", String(todo.completed));
   const prioLabel = todo.priority < 4 ? `우선순위 ${todo.priority} ` : "";
   check.setAttribute("aria-label", `${prioLabel}${todo.title} ${todo.completed ? "완료 취소" : "완료"}`);
@@ -384,11 +404,12 @@ function taskRow(todo) {
     check.disabled = true;
     const ok = await run(todo.completed ? "완료 취소" : "완료 처리",
       () => api(`/todos/${todo.id}`, "PUT", { ...todo, completed: !todo.completed }));
-    if (ok) await load();
+    if (ok) { state.focus = `check-${todo.id}`; await load(); }
     else check.disabled = false;
   };
 
   const edit = make("button", { className: "icon-btn", type: "button", title: "편집" }, icon(ICONS.edit, 16));
+  edit.dataset.focus = `edit-${todo.id}`;
   edit.setAttribute("aria-label", `${todo.title} 편집`);
   edit.onclick = () => { state.editingId = todo.id; state.adding = false; render(); };
 
@@ -428,6 +449,7 @@ function renderAdder() {
       make("span", { className: "plus" }, icon(ICONS.plus, 14)),
       make("span", { textContent: "할 일 추가" }),
     );
+    trigger.dataset.focus = "add";
     trigger.onclick = () => { state.adding = true; state.editingId = null; render(); };
     box.replaceChildren(trigger);
     return;
@@ -438,7 +460,7 @@ function renderAdder() {
     description: "",
     submitLabel: "할 일 추가",
     keepOpen: true,
-    onCancel: () => { state.adding = false; render(); },
+    onCancel: () => { state.adding = false; state.focus = "add"; render(); },
     onSubmit: async (values) => {
       const ok = await run("추가", () => api("/todos", "POST", values));
       if (ok) await load();
@@ -455,12 +477,17 @@ function editorCard({ title, description, priority = 4, submitLabel, keepOpen = 
 
   let currentPriority = priority;
   const prioButtons = PRIORITIES.map((p) => {
-    const btn = make("button", { className: "prio-btn", type: "button", title: `우선순위 ${p}${PRIORITY_HINT[p] || ""}` },
+    const name = `우선순위 ${p}${PRIORITY_HINT[p] || ""}`;
+    const btn = make("button", { className: "prio-btn", type: "button", title: name },
       icon(ICONS.flag, 14),
       make("span", { textContent: String(p) }),
     );
+    btn.setAttribute("aria-label", name);           // 화면 낭독기가 "2" 가 아니라 "우선순위 2" 로 읽는다
     btn.dataset.priority = String(p);
-    btn.onclick = () => setPriority(p);
+    btn.onclick = (e) => {
+      setPriority(p);
+      if (e.detail) titleInput.focus();               // 마우스로 골랐으면 제목칸으로 → 바로 Enter 로 제출 (키보드는 detail 0)
+    };
     return btn;
   });
   const setPriority = (p) => {
@@ -547,6 +574,7 @@ $("confirm-ok").onclick = async () => {
   const ok = await run("삭제", () => api(`/todos/${todo.id}`, "DELETE"));
   if (ok) {
     if (state.editingId === todo.id) state.editingId = null;
+    state.focus = "add";                              // 누른 삭제 버튼이 사라졌으니 "할 일 추가" 로
     await load();
   }
 };
