@@ -52,6 +52,9 @@ def save_store(store: TodoStore) -> None:
     TODO_FILE.write_text(data, encoding="utf-8")
 
 
+NOT_FOUND = {404: {"description": "To-Do item not found"}}  # find_index 가 던지는 404
+
+
 def find_index(todos: list[TodoItem], todo_id: int) -> int:
     for i, todo in enumerate(todos):
         if todo.id == todo_id:
@@ -74,7 +77,7 @@ def create_todo(payload: TodoIn) -> TodoItem:
     return todo
 
 
-@app.put("/todos/{todo_id}")                     # 수정
+@app.put("/todos/{todo_id}", responses=NOT_FOUND)  # 수정
 def update_todo(todo_id: int, payload: TodoIn) -> TodoItem:
     store = load_store()
     todo = TodoItem(id=todo_id, **payload.model_dump())
@@ -83,7 +86,7 @@ def update_todo(todo_id: int, payload: TodoIn) -> TodoItem:
     return todo
 
 
-@app.delete("/todos/{todo_id}", status_code=204)  # 삭제
+@app.delete("/todos/{todo_id}", status_code=204, responses=NOT_FOUND)  # 삭제
 def delete_todo(todo_id: int) -> None:
     store = load_store()
     del store.todos[find_index(store.todos, todo_id)]
