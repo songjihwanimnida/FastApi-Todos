@@ -1,5 +1,3 @@
-from datetime import date
-
 import pytest
 from fastapi.testclient import TestClient
 from pydantic import ValidationError
@@ -29,7 +27,7 @@ def stored():                                    # 파일에 저장된 할 일 �
 
 def test_model_defaults():
     todo = TodoIn(title="Test")
-    assert (todo.description, todo.completed, todo.priority, todo.due_date) == ("", False, 4, None)
+    assert (todo.description, todo.completed, todo.priority) == ("", False, 4)
 
 
 def test_model_requires_id():
@@ -40,20 +38,12 @@ def test_model_requires_id():
 # ---------- 상태관리 ----------
 
 def test_save_and_load():
-    store = TodoStore(todos=[TodoItem(id=1, title="장보기", priority=1, due_date=date(2026, 10, 31))])
+    store = TodoStore(todos=[TodoItem(id=1, title="장보기", priority=1)])
     save_store(store)
     assert load_store() == store
     text = main.TODO_FILE.read_text(encoding="utf-8")
     assert "장보기" in text                       # 한글이 \uXXXX 로 바뀌지 않음
     assert '"next_id": 2' in text                # 다음 id 도 함께 저장
-    assert '"due_date": "2026-10-31"' in text    # 날짜는 문자열로 저장
-
-
-def test_v4_file_without_due_date():             # 마감일 이전(v4) 형식도 읽힘
-    main.TODO_FILE.write_text('{"next_id": 3, "todos": [{"id": 1, "title": "옛 할 일"}]}', encoding="utf-8")
-    store = load_store()
-    assert store.todos[0].due_date is None
-    assert store.next_id == 3
 
 
 def test_legacy_list_format():                   # v3 이하 형식(목록만, priority 없음)도 읽힘
@@ -101,25 +91,8 @@ def test_get_todos_with_items():
 def test_create_todo():
     response = client.post("/todos", json={"title": "Test", "id": 999})  # 보낸 id 는 무시됨
     assert response.status_code == 201
-    assert response.json() == {"id": 1, "title": "Test", "description": "", "completed": False, "priority": 4, "due_date": None}
+    assert response.json() == {"id": 1, "title": "Test", "description": "", "completed": False, "priority": 4}
     assert len(stored()) == 1
-
-
-def test_due_date_roundtrip():                   # 저장 → 다시 읽기 경로를 지나야 load/save 문제가 드러난다
-    response = client.post("/todos", json={"title": "과제", "due_date": "2026-10-31"})
-    assert response.status_code == 201
-    assert response.json()["due_date"] == "2026-10-31"
-    assert client.get("/todos").json()[0]["due_date"] == "2026-10-31"
-    assert '"due_date": "2026-10-31"' in main.TODO_FILE.read_text(encoding="utf-8")
-
-
-def test_update_due_date():
-    seed(1)
-    assert client.put("/todos/1", json={"title": "과제", "due_date": "2026-10-31"}).json()["due_date"] == "2026-10-31"
-    assert client.put("/todos/1", json={"title": "과제", "due_date": None}).json()["due_date"] is None
-    client.put("/todos/1", json={"title": "과제", "due_date": "2026-10-31"})
-    assert client.put("/todos/1", json={"title": "과제"}).json()["due_date"] is None  # PUT 은 전체 교체 → 생략하면 지워짐
-    assert stored()[0].due_date is None
 
 
 def test_create_todo_strips_whitespace():
@@ -153,10 +126,6 @@ def test_read_root():
     assert "text/html" in response.headers["content-type"]
 
 
-def test_api_version():
-    assert client.get("/openapi.json").json()["info"]["version"] == "4.1.0"
-
-
 # ---------- 유효성 검사 ----------
 
 @pytest.mark.parametrize("payload", [
@@ -164,10 +133,6 @@ def test_api_version():
     {"title": "a" * 100},                        # 최대 길이
     {"title": "Test", "priority": 1},
     {"title": "Test", "priority": 4},
-    {"title": "Test", "due_date": "2000-01-01"},  # 지난 날짜 허용
-    {"title": "Test", "due_date": "0001-01-01"},  # 연도 범위는 제한하지 않음
-    {"title": "Test", "due_date": "9999-12-31"},
-    {"title": "Test", "due_date": None},
 ])
 def test_create_todo_boundary(payload):
     assert client.post("/todos", json=payload).status_code == 201
@@ -185,12 +150,6 @@ def test_create_todo_boundary(payload):
     {"title": "Test", "priority": True},         # 자동 타입 변환 안 함 (true→1)
     {"title": "Test", "priority": "2"},          # ("2"→2)
     {"title": "Test", "completed": "yes"},       # ("yes"→true)
-    {"title": "Test", "due_date": "2026-02-30"},  # 없는 날짜
-    {"title": "Test", "due_date": "2026-1-5"},    # YYYY-MM-DD 아님
-    {"title": "Test", "due_date": "20261031"},
-    {"title": "Test", "due_date": "2026-10-31T00:00:00"},  # 시간 포함
-    {"title": "Test", "due_date": ""},            # 빈 문자열 (화면은 null 로 보낸다)
-    {"title": "Test", "due_date": 1793404800},    # 타임스탬프
 ])
 def test_create_todo_invalid(payload):
     assert client.post("/todos", json=payload).status_code == 422

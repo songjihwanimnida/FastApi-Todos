@@ -1,12 +1,9 @@
 import json
-import re
-from datetime import date
 from pathlib import Path
-from typing import Annotated
 
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse
-from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 BASE_DIR = Path(__file__).resolve().parent       # main.py 가 있는 폴더
 TODO_FILE = BASE_DIR / "todo.json"
@@ -15,22 +12,7 @@ INDEX_FILE = BASE_DIR / "templates" / "index.html"
 if not TODO_FILE.exists():                       # 없으면 빈 목록으로 만들어 둔다
     TODO_FILE.write_text("[]", encoding="utf-8")
 
-app = FastAPI(title="To-Do List API", version="4.1.0")
-
-ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
-
-
-def parse_iso_date(value):
-    # FastAPI 는 요청 본문을 dict 로 검증해서 strict 모드가 "2026-10-31" 문자열을 거부한다
-    # → "YYYY-MM-DD" 모양 문자열만 date 로 바꾼다. 다른 문자열은 여기서, 숫자 등은 strict 검증에서 422
-    if isinstance(value, str):
-        if not ISO_DATE.fullmatch(value):
-            raise ValueError("날짜는 YYYY-MM-DD 형식이어야 합니다")
-        return date.fromisoformat(value)         # 없는 날짜(2026-02-30)는 ValueError → 422
-    return value
-
-
-IsoDate = Annotated[date, BeforeValidator(parse_iso_date)]
+app = FastAPI(title="To-Do List API", version="4.0.0")
 
 
 class TodoIn(BaseModel):                         # 클라이언트가 보내는 데이터 (id 없음)
@@ -41,7 +23,6 @@ class TodoIn(BaseModel):                         # 클라이언트가 보내는 
     description: str = ""
     completed: bool = False
     priority: int = Field(default=4, ge=1, le=4)  # 1 이 가장 높다
-    due_date: IsoDate | None = None              # 마감일 (날짜만, "YYYY-MM-DD") — 기한 지남 판단은 화면이 한다
 
 
 class TodoItem(TodoIn):                          # 서버가 돌려주는 데이터 (id 있음)
@@ -63,11 +44,11 @@ def load_store() -> TodoStore:
     data = json.loads(raw)
     if isinstance(data, list):                   # v3 이하 형식: 할 일 목록만 저장했다
         data = {"todos": data}
-    return TodoStore(**data)                     # 저장된 "YYYY-MM-DD" 는 parse_iso_date 가 date 로 바꾼다
+    return TodoStore(**data)
 
 
 def save_store(store: TodoStore) -> None:
-    data = json.dumps(store.model_dump(mode="json"), indent=2, ensure_ascii=False)  # date → "YYYY-MM-DD"
+    data = json.dumps(store.model_dump(), indent=2, ensure_ascii=False)
     TODO_FILE.write_text(data, encoding="utf-8")
 
 

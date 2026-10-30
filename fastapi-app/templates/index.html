@@ -78,11 +78,6 @@
   .prio-tag[data-priority="2"] { color: var(--p2); }
   .prio-tag[data-priority="3"] { color: var(--p3); }
   .task[data-done="true"] .prio-tag { color: var(--text-muted); }
-  .task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin-top: 3px; }
-  .task-meta .prio-tag { margin-top: 0; }
-  .due-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-muted); }
-  /* 기한 지남 — 우선순위 1 과 같은 빨강이라 "기한 지남" 글자로도 구분한다 */
-  .due-tag[data-overdue="true"] { color: var(--danger); font-weight: 600; }
   .task-actions { display: flex; gap: 2px; opacity: 0; flex: none; }
   .task:hover .task-actions, .task:focus-within .task-actions { opacity: 1; }
   .icon-btn { padding: 5px; border-radius: 4px; color: var(--text-muted); display: flex; }
@@ -141,12 +136,6 @@
   .prio-btn[data-priority="1"] svg { color: var(--p1); }
   .prio-btn[data-priority="2"] svg { color: var(--p2); }
   .prio-btn[data-priority="3"] svg { color: var(--p3); }
-  .due-group { display: flex; align-items: center; gap: 2px; }
-  .due-group input[type="date"] {
-    font: inherit; font-size: 12px; color: var(--text); background: #fff;
-    border: 1px solid #dedede; border-radius: 5px; padding: 3px 6px;
-  }
-  .due-group input[type="date"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
   .btn { padding: 7px 13px; border-radius: 5px; font-size: 13px; font-weight: 500; }
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { background: var(--accent-hover); }
@@ -255,25 +244,11 @@ const ICONS = {
   plus: '<path d="M12 5v14M5 12h14"/>',
   flag: '<path d="M5 21V4h11l-2 4 2 4H5"/>',
   chevron: '<path d="m6 9 6 6 6-6"/>',
-  calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-  x: '<path d="M18 6 6 18M6 6l12 12"/>',
 };
 
 const PRIORITIES = [1, 2, 3, 4];                  // 1 이 가장 높다
 const PRIORITY_HINT = { 1: " (가장 높음)", 4: " (기본)" };
 const byPriority = (a, b) => a.priority - b.priority || a.id - b.id;
-
-// 마감일은 "YYYY-MM-DD" 문자열로만 다룬다 — Date 로 파싱하거나 toISOString 을 쓰면 UTC 기준이 되어 하루가 어긋난다
-function todayLocal() {
-  const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
-  return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
-}
-const isOverdue = (todo, today) => !todo.completed && Boolean(todo.due_date) && todo.due_date < today;  // 당일까지는 아님
-function formatDue(due) {
-  const [y, m, d] = due.split("-").map(Number);
-  return `${y}년 ${m}월 ${d}일`;
-}
 
 // focus: 다시 그린 뒤 포커스를 돌려줄 버튼의 data-focus 값 ("check-3", "edit-3", "add")
 const state = { todos: [], editingId: null, adding: false, loading: true, failed: false, busy: false, doneOpen: false, focus: null };
@@ -409,7 +384,6 @@ function taskRow(todo) {
       title: todo.title,
       description: todo.description,
       priority: todo.priority,
-      dueDate: todo.due_date,
       submitLabel: "저장",
       onCancel: () => { state.editingId = null; state.focus = `edit-${todo.id}`; render(); },
       onSubmit: async (values) => {
@@ -424,10 +398,8 @@ function taskRow(todo) {
   check.dataset.priority = String(todo.priority);
   check.dataset.focus = `check-${todo.id}`;
   check.setAttribute("aria-checked", String(todo.completed));
-  const overdue = isOverdue(todo, todayLocal());
   const prioLabel = todo.priority < 4 ? `우선순위 ${todo.priority} ` : "";
-  const overdueLabel = overdue ? "기한 지남 " : "";
-  check.setAttribute("aria-label", `${prioLabel}${overdueLabel}${todo.title} ${todo.completed ? "완료 취소" : "완료"}`);
+  check.setAttribute("aria-label", `${prioLabel}${todo.title} ${todo.completed ? "완료 취소" : "완료"}`);
   check.onclick = async () => {
     check.disabled = true;
     const ok = await run(todo.completed ? "완료 취소" : "완료 처리",
@@ -451,22 +423,12 @@ function taskRow(todo) {
   );
   prioTag.dataset.priority = String(todo.priority);
 
-  let dueTag = null;
-  if (todo.due_date && !todo.completed) {          // 완료한 일은 마감일을 보여주지 않는다
-    dueTag = make("span", { className: "due-tag" },
-      icon(ICONS.calendar, 12),
-      overdue ? make("span", { textContent: "기한 지남 ·" }) : null,
-      make("span", { textContent: formatDue(todo.due_date) }),
-    );
-    if (overdue) dueTag.dataset.overdue = "true";
-  }
-
   const row = make("li", { className: "task" },
     check,
     make("div", { className: "task-body" },
       make("div", { className: "task-title", textContent: todo.title }),
       todo.description ? make("div", { className: "task-desc", textContent: todo.description }) : null,
-      make("div", { className: "task-meta" }, prioTag, dueTag),
+      prioTag,
     ),
     make("div", { className: "task-actions" }, edit, del),
   );
@@ -507,7 +469,7 @@ function renderAdder() {
   }));
 }
 
-function editorCard({ title, description, priority = 4, dueDate = null, submitLabel, keepOpen = false, onSubmit, onCancel }) {
+function editorCard({ title, description, priority = 4, submitLabel, keepOpen = false, onSubmit, onCancel }) {
   const titleInput = make("input", { type: "text", value: title, placeholder: "할 일 이름", maxLength: 100 });
   titleInput.setAttribute("aria-label", "할 일 이름");
   const descInput = make("textarea", { value: description || "", placeholder: "설명", rows: 1 });
@@ -539,17 +501,6 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
   );
   prioGroup.setAttribute("aria-label", "우선순위 (1이 가장 높음)");
 
-  const dueInput = make("input", { type: "date", value: dueDate || "" });
-  dueInput.setAttribute("aria-label", "마감일");
-  const dueClear = make("button", { className: "icon-btn", type: "button", title: "마감일 지우기" }, icon(ICONS.x, 14));
-  dueClear.setAttribute("aria-label", "마감일 지우기");
-  dueClear.onclick = () => { dueInput.value = ""; dueInput.focus(); };
-  const dueGroup = make("div", { className: "due-group" },
-    make("span", { className: "prio-label", textContent: "마감일" }),
-    dueInput,
-    dueClear,
-  );
-
   const submit = make("button", { className: "btn btn-primary", type: "submit", textContent: submitLabel, disabled: !title.trim() });
   const cancel = make("button", { className: "btn btn-ghost", type: "button", textContent: "취소" });
   cancel.onclick = onCancel;
@@ -566,7 +517,6 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
     descInput,
     make("div", { className: "card-footer" },
       prioGroup,
-      dueGroup,
       make("div", { className: "card-actions" }, cancel, submit),
     ),
   );
@@ -583,26 +533,15 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
     e.preventDefault();
     const value = titleInput.value.trim();
     if (!value) { titleInput.focus(); return; }
-    if (dueInput.validity.badInput) {              // 덜 입력한 날짜는 value 가 "" 라 그대로 두면 조용히 사라진다
-      toast("마감일을 끝까지 입력하거나 지워 주세요.");
-      dueInput.focus();
-      return;
-    }
 
     submit.disabled = true;
     cancel.disabled = true;
-    const ok = await onSubmit({
-      title: value,
-      description: descInput.value.trim(),
-      priority: currentPriority,
-      due_date: dueInput.value || null,            // PUT 은 전체 교체라 지운 마감일도 null 로 꼭 보낸다
-    });
+    const ok = await onSubmit({ title: value, description: descInput.value.trim(), priority: currentPriority });
     if (!ok) { submit.disabled = false; cancel.disabled = false; return; }
     if (keepOpen) {
       // 연속 등록: 입력만 비우고 폼은 열어 둔다
       titleInput.value = "";
       descInput.value = "";
-      dueInput.value = "";
       setPriority(4);
       autoGrow();
       submit.disabled = true;
@@ -643,11 +582,6 @@ dialog.addEventListener("close", () => {
   if (deleteOpener && deleteOpener.isConnected) deleteOpener.focus();
   deleteTarget = null;
   deleteOpener = null;
-});
-
-// 자정을 넘겨 켜 둔 탭으로 돌아오면 "오늘"을 다시 계산한다 — 폼이 열려 있으면 입력이 지워지므로 건너뛴다
-document.addEventListener("visibilitychange", () => {
-  if (document.visibilityState === "visible" && !state.adding && state.editingId === null) renderList();
 });
 
 render();
