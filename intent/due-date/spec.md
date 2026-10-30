@@ -31,9 +31,9 @@ Intent: [intent.md](./intent.md)
 ## 설계
 
 **백엔드**
-- `TodoIn` 에 `due_date: date | None = None` 을 추가한다. `TodoItem` 과 `TodoStore` 는 상속받으므로 그대로 둔다.
-- 엄격 모드(`strict=True`)는 유지한다. JSON 요청에서 Pydantic 의 엄격 날짜 검증이 R3 을 그대로 충족한다(아래 검증 결과 참고).
-- **불러오기**는 JSON 모드 검증(`model_validate_json`)으로 바꾼다. v3 목록 형식을 `{"todos": [...]}` 로 감싸는 처리는 유지한다.
+- `TodoIn` 에 `due_date: IsoDate | None = None` 을 추가한다. `TodoItem` 과 `TodoStore` 는 상속받으므로 그대로 둔다.
+- 엄격 모드(`strict=True`)는 유지한다. `IsoDate` 는 `date` 에 `BeforeValidator(parse_iso_date)` 를 붙인 타입이다. 이 검증기는 `[0-9]{4}-[0-9]{2}-[0-9]{2}` 모양의 문자열만 `date.fromisoformat` 으로 바꾸고, 다른 문자열은 422 로 거부한다. 숫자처럼 문자열이 아닌 값은 strict 검증이 거부한다.
+  - *구현 중 수정(2026-10-27)*: 처음에는 "JSON 요청이면 Pydantic 엄격 날짜 검증이 자동으로 R3 을 충족한다"고 보았다. 그런데 FastAPI 는 요청 본문을 dict 로 바꾼 뒤 Python 모드로 검증해서, 올바른 `"2026-10-31"` 도 `date_type` 오류로 거부했다. 검증기 하나로 요청 검증과 불러오기(우려 1)가 함께 해결되므로, 불러오기를 JSON 모드로 바꾸는 계획은 빼고 `load_store()` 는 그대로 둔다.
 - **저장**은 JSON 직렬화 모드(`model_dump(mode="json")`)로 바꾼다. 들여쓰기와 `ensure_ascii=False` 는 그대로 둔다.
 
 **화면**
@@ -56,7 +56,7 @@ Intent: [intent.md](./intent.md)
 
 | intent 제약 조건 | 충족 방법 | 요구사항 | 검증 |
 |---|---|---|---|
-| 마감일 없는 기존 `todo.json` (v3·v4) 이 그대로 읽힌다 | 기본값이 `null` 인 선택 필드라 없으면 `null` 로 채운다. v3 목록 감싸기를 유지하고, 불러오기만 JSON 모드로 바꾼다. | R1, R6 | 기존 `test_legacy_list_format` 이 통과하고, v4 형식(`due_date` 없음)을 읽는 테스트를 추가한다. |
+| 마감일 없는 기존 `todo.json` (v3·v4) 이 그대로 읽힌다 | 기본값이 `null` 인 선택 필드라 없으면 `null` 로 채운다. v3 목록 감싸기를 유지하고, 저장된 날짜 문자열은 `parse_iso_date` 가 읽는다. | R1, R6 | 기존 `test_legacy_list_format` 이 통과하고, v4 형식(`due_date` 없음)을 읽는 테스트를 추가한다. |
 | 엄격한 검증 수준을 유지하고, 날짜가 아니거나 틀린 값은 422 | `strict=True` 를 유지하고 Pydantic 의 엄격 날짜 검증을 그대로 쓴다. 따로 파서를 만들지 않는다. | R2, R3 | `test_create_todo_invalid` 에 R3 의 값들을 추가하고, 422 이면서 저장되지 않았는지 확인한다. |
 | PUT 전체 교체에서, 관련 없는 수정이 마감일을 지우지 않는다 | API 는 전체 교체 그대로 둔다(R7). 화면이 모든 PUT 에 현재 `due_date` 를 담는다(R9). | R7, R9 | API 테스트로 생략 시 `null`(전체 교체)을 확인한다. Playwright 로 "마감일 있는 항목 완료 → 완료 취소 → 마감일 유지"를 확인한다. |
 | 기한 지남을 색만으로 구분하지 않는다 | 빨간색에 "기한 지남" 글자와 체크 버튼 접근성 이름을 더한다. | R13, R14 | Playwright 로 "기한 지남" 글자와 체크 버튼 이름을 확인하고, 실제 스크린리더는 수동으로 확인한다. |
@@ -76,7 +76,7 @@ intent 의 질문은 모두 답이 나왔다. 오늘 기준은 사용자 컴퓨�
 ## Areas of concern
 
 **1. 지금 `load_store()` 로는 마감일이 들어간 파일을 읽지 못한다.** (확인함, pydantic 2.14.1)
-`load_store()` 는 `json.loads` 로 만든 dict 를 `TodoStore(**data)` 로 검증한다. 이것은 Python 모드 검증이라 `strict=True` 에서 문자열 `"2026-10-31"` 을 `date_type` 오류로 거부한다. 필드만 추가하면 마감일이 있는 할 일을 처음 저장한 뒤부터 **모든 요청이 500** 이 되고, 파일을 손으로 고치기 전까지 앱을 쓸 수 없다. 기존 테스트는 `due_date` 를 쓰지 않으므로 이 문제를 잡지 못한다. 그래서 JSON 모드 검증으로 바꿔야 한다. `model_validate(..., strict=False)` 도 통하지만, 다른 필드의 엄격 검증까지 풀리므로 쓰지 않는다.
+`load_store()` 는 `json.loads` 로 만든 dict 를 `TodoStore(**data)` 로 검증한다. 이것은 Python 모드 검증이라 `strict=True` 에서 문자열 `"2026-10-31"` 을 `date_type` 오류로 거부한다. 필드만 추가하면 마감일이 있는 할 일을 처음 저장한 뒤부터 **모든 요청이 500** 이 되고, 파일을 손으로 고치기 전까지 앱을 쓸 수 없다. 기존 테스트는 `due_date` 를 쓰지 않으므로 이 문제를 잡지 못한다. 같은 이유로 FastAPI 의 요청 검증도 올바른 날짜를 거부한다. 그래서 `due_date` 필드에만 `"YYYY-MM-DD"` 문자열을 날짜로 바꾸는 검증기를 붙인다(설계 참고). `strict=False` 도 통하지만, 다른 필드의 엄격 검증까지 풀리고 타임스탬프 숫자까지 받아들이므로 쓰지 않는다.
 
 **2. 지금 `save_store()` 로는 날짜를 저장하지 못한다.** (확인함)
 `json.dumps(store.model_dump())` 는 `date` 객체를 만나면 `TypeError: Object of type date is not JSON serializable` 을 낸다. 파일을 쓰기 전에 실패하므로 데이터가 깨지지는 않지만, 마감일이 있는 POST·PUT 은 모두 500 이 된다.
@@ -117,7 +117,7 @@ intent 의 질문은 모두 답이 나왔다. 오늘 기준은 사용자 컴퓨�
   - R5 저장 후 다시 읽으면 같은 값(파일에 문자열로 저장됨)
   - R6 v4 형식(`due_date` 없음) 읽기
   - R7 PUT 에서 생략하면 `null`
-- **테스트 작성 주의**: Python 에서 `TodoItem(due_date="2026-10-31")` 처럼 문자열을 넣으면 엄격 모드에서 실패한다. 픽스처는 `datetime.date(2026, 10, 31)` 을 쓴다.
+- **테스트 작성 참고**: `parse_iso_date` 덕분에 Python 에서도 `TodoItem(due_date="2026-10-31")` 처럼 문자열을 넣을 수 있다. 픽스처에서는 `datetime.date(2026, 10, 31)` 을 써서 의도를 드러낸다.
 - **Playwright UI 테스트** (`fastapi-app/ui_tests/`, 커밋 33dfed3 이전 구조를 되살림):
   - `conftest.py` 는 Playwright 와 API 부분만 되살린다: `BASE_URL`(기본값 `http://localhost:8000`, 환경변수로 덮어씀), 제목 접두어 `[UI테스트 …]` 로 테스트 항목만 만들고 지우는 `seed`/`cleanup`, 한국어 locale 브라우저 설정. Selenium 픽스처는 쓰지 않으므로 넣지 않는다.
   - `test_due_date_ui.py` 한 파일에서 브라우저를 `timezone_id="Asia/Seoul"` 로 열고, `page.clock` 으로 시각을 **2026-10-31 08:30 (KST)** 에 고정한다. 오전 9시 전이라 UTC 날짜로 계산하면 하루가 어긋나는 시각이어서, 우려 5 의 함정까지 함께 확인할 수 있다.
