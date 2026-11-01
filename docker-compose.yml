@@ -62,6 +62,16 @@ services:
       - GF_PLUGINS_PREINSTALL_AUTO_UPDATE=false
     volumes:
       - grafana-data:/var/lib/grafana
+  # services: 아래에 추가 (앞의 들여쓰기 2칸까지 그대로)
+  node-exporter:
+    image: prom/node-exporter:v1.12.1           # latest 대신 버전 고정
+    container_name: node-exporter
+    read_only: true
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    # ports 없음: Prometheus가 내부 네트워크(node-exporter:9100)로 수집하므로 외부 공개 불필요
 
 volumes:                                        # ← 최상위(0칸)로 이동
   sonarqube_data:
