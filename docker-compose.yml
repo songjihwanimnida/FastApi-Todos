@@ -72,6 +72,21 @@ services:
     cap_drop:
       - ALL
     # ports 없음: Prometheus가 내부 네트워크(node-exporter:9100)로 수집하므로 외부 공개 불필요
+  # services: 아래에 추가 (앞의 들여쓰기 2칸까지 그대로)
+  cadvisor:
+    image: ghcr.io/google/cadvisor:v0.60.6      # latest 대신 버전 고정 (v0.53.0부터 ghcr.io로 이전)
+    container_name: cadvisor
+    privileged: true                            # 호스트의 cgroup·컨테이너 정보를 읽기 위해 필요
+    devices:
+      - /dev/kmsg                               # OOM 등 커널 이벤트 수집용
+    volumes:                                    # 호스트 정보는 모두 읽기 전용(:ro)으로 마운트
+      - /:/rootfs:ro
+      - /var/run:/var/run:ro
+      - /sys:/sys:ro
+      - /var/lib/docker/:/var/lib/docker:ro
+      - /dev/disk/:/dev/disk:ro
+    restart: unless-stopped
+    # ports 없음: Prometheus가 내부 네트워크(cadvisor:8080)로 수집 + Jenkins 8080과 충돌 방지 + 웹 UI에 로그인 기능 없음
 
 volumes:                                        # ← 최상위(0칸)로 이동
   sonarqube_data:
@@ -79,4 +94,4 @@ volumes:                                        # ← 최상위(0칸)로 이동
   sonarqube_logs:
   sonarqube_temp:
   prometheus-data:
-  grafana-data:
+  grafana-data: 
