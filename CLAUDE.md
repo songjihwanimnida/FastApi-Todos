@@ -27,6 +27,9 @@ git restore todo.json                                # 로컬 서버로 돌리�
 docker compose up -d --build fastapi-app                 # (저장소 루트) http://localhost:5005
 docker compose up -d sonarqube                           # (저장소 루트) http://localhost:9000
 docker compose up -d prometheus grafana node-exporter cadvisor  # (저장소 루트) 모니터링: Grafana http://localhost:3000
+docker compose up -d influxdb grafana                    # (저장소 루트) JMeter 결과 저장용 InfluxDB 1.x
+$env:JMETER_LOOPS = "30"; docker compose run --rm jmeter # 부하 테스트 → InfluxDB. JMETER_THREADS / JMETER_LOOPS / JMETER_RAMP 생략 시 10명·1회·10초
+docker exec influxdb influx -database jmeter -execute "SELECT count(*) FROM jmeter"   # 저장 확인
 ```
 
 ## 컨벤션
@@ -46,6 +49,7 @@ docker compose up -d prometheus grafana node-exporter cadvisor  # (저장소 루
 - 기능 문서는 `intent/<slug>/` 에 intent.md → spec.md → plan.md 순서로 쌓는다.
 - `GET /metrics`: `prometheus-fastapi-instrumentator` 가 노출하는 Prometheus 메트릭 (Swagger 문서에는 숨김).
 - `docker-compose.yml`(루트): 앱(5005→8000) + SonarQube(설정은 `sonar-project.properties`) + 모니터링(Prometheus `127.0.0.1:7070`, Grafana 3000, node-exporter, cadvisor). 수집 대상은 `prometheus/prometheus.yml`.
+- InfluxDB 1.x(포트 비공개, DB `jmeter`): JMeter 의 Backend Listener 가 테스트 도중 결과를 밀어 넣는다(Prometheus 와 반대로 push). Grafana 데이터 소스 `InfluxDB-JMeter` 는 `grafana/provisioning/datasources/` 파일로 자동 등록되고, 대시보드는 UI 에서 5496 을 import 한다.
 
 ## Claude가 자주 틀리는 것
 
