@@ -19,6 +19,8 @@ services:
       context: ./jmeter
       dockerfile: Dockerfile
     container_name: jmeter
+    environment:
+      - JVM_ARGS=-Duser.home=/tmp               # --user 로 이미지에 없는 uid 로 돌려도 Java 가 홈 폴더를 찾게 함
     volumes:
       - ./jmeter:/jmeter
     command:
