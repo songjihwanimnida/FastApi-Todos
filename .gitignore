@@ -5,3 +5,6 @@ __pycache__/
 reports/
 coverage.xml
 .coverage
+jmeter/results.jtl
+jmeter/report/
+jmeter/jmeter.log

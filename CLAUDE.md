@@ -27,6 +27,10 @@ git restore todo.json                                # 로컬 서버로 돌리�
 docker compose up -d --build fastapi-app                 # (저장소 루트) http://localhost:5005
 docker compose up -d sonarqube                           # (저장소 루트) http://localhost:9000
 docker compose up -d prometheus grafana node-exporter cadvisor  # (저장소 루트) 모니터링: Grafana http://localhost:3000
+docker compose up -d influxdb grafana                    # (저장소 루트) JMeter 결과 저장용 InfluxDB 1.x
+$env:JMETER_LOOPS = "30"; docker compose run --rm jmeter # 부하 테스트 → InfluxDB. JMETER_THREADS / JMETER_LOOPS / JMETER_RAMP 생략 시 10명·1회·10초
+#   리눅스 서버(~/FastApi_Todos-deploy, 도메인 계정): JMETER_LOOPS=30 docker compose run --rm --user "$(id -u):$(id -g)" jmeter
+docker exec influxdb influx -database jmeter -execute "SELECT count(*) FROM jmeter"   # 저장 확인
 ```
 
 ## 컨벤션
@@ -46,6 +50,7 @@ docker compose up -d prometheus grafana node-exporter cadvisor  # (저장소 루
 - 기능 문서는 `intent/<slug>/` 에 intent.md → spec.md → plan.md 순서로 쌓는다.
 - `GET /metrics`: `prometheus-fastapi-instrumentator` 가 노출하는 Prometheus 메트릭 (Swagger 문서에는 숨김).
 - `docker-compose.yml`(루트): 앱(5005→8000) + SonarQube(설정은 `sonar-project.properties`) + 모니터링(Prometheus `127.0.0.1:7070`, Grafana 3000, node-exporter, cadvisor). 수집 대상은 `prometheus/prometheus.yml`.
+- InfluxDB 1.x(포트 비공개, DB `jmeter`): JMeter 의 Backend Listener 가 테스트 도중 결과를 밀어 넣는다(Prometheus 와 반대로 push). Grafana 데이터 소스 `InfluxDB-JMeter` 는 `grafana/provisioning/datasources/` 파일로 자동 등록되고, 대시보드는 UI 에서 5496 을 import 한다.
 
 ## Claude가 자주 틀리는 것
 
@@ -62,4 +67,6 @@ docker compose up -d prometheus grafana node-exporter cadvisor  # (저장소 루
 - **`httpx` 를 의존성에 추가** → 이 프로젝트는 `httpx2` 를 쓴다.
 - **`main.py` 를 고치다 `Instrumentator().instrument(app)...` 줄을 지움** → `/metrics` 가 404 가 되어 Prometheus 수집과 Grafana 대시보드가 빈다. 충돌 해결·리팩터링 때 남아 있는지 확인한다.
 - **수동 테스트로 바뀐 `fastapi-app/todo.json` 을 커밋** → git 에 추적되는 파일이라 서버를 돌리면 diff 가 생긴다. 의도한 변경이 아니면 커밋하지 않는다.
+- **서버에서 JMeter 가 `jmeter.log (Permission denied)`, `Cannot write to '/jmeter/report'`** → 이미지는 uid 1000 인데 서버 계정은 도메인 uid 라 `./jmeter` 에 못 쓴다. `--user "$(id -u):$(id -g)"` 로 돌린다. `chmod 777` / `chown 1000` 은 하지 않는다.
+- **에러율 100% + `UnknownHostException: fastapi-app`** → 앱 컨테이너가 `loadtest-net` 에 없다(네트워크 설정 전에 만든 컨테이너). `docker network connect --alias fastapi-app <프로젝트>_loadtest-net FastApi-app2` 로 연결한다. 앱 컨테이너를 다시 만들면 컨테이너 안의 `todo.json` 이 이미지 것으로 돌아가니 함부로 `up` 으로 재생성하지 않는다.
 - **`pytest` 만 돌리고 UI 까지 확인했다고 생각** → `testpaths = ["tests"]` 라 `ui_tests/` 는 따로 `pytest ui_tests` 로 돌려야 한다. `integration_tests/` 는 커밋 33dfed3 에서 삭제됐다.
