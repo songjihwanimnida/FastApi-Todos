@@ -8,3 +8,4 @@ coverage.xml
 jmeter/results.jtl
 jmeter/report/
 jmeter/jmeter.log
+fastapi-app/todo.json.tmp

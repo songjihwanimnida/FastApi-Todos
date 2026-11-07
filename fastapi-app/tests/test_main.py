@@ -1,3 +1,4 @@
+from concurrent.futures import ThreadPoolExecutor
 from datetime import date
 
 import pytest
@@ -147,6 +148,26 @@ def test_update_and_delete_not_found():
     assert client.delete("/todos/1").status_code == 404
 
 
+def test_concurrent_requests():                  # JMeter 에서 나온 문제: 동시 요청 때 빈 파일을 읽어 500, id 중복·누락
+    threads, rounds = 8, 25
+    quiet = TestClient(app, raise_server_exceptions=False)  # 500 을 예외 대신 상태 코드로 받는다
+
+    def user(n):
+        codes = []
+        for i in range(rounds):
+            codes.append(quiet.post("/todos", json={"title": f"동시 {n}-{i}"}).status_code)
+            codes.append(quiet.get("/todos").status_code)
+        return codes
+
+    with ThreadPoolExecutor(threads) as pool:
+        codes = [c for result in pool.map(user, range(threads)) for c in result]
+
+    assert set(codes) == {200, 201}              # 500 없음
+    ids = [t.id for t in stored()]
+    assert sorted(ids) == list(range(1, threads * rounds + 1))  # 빠진 할 일·겹친 id 없음
+    assert load_store().next_id == threads * rounds + 1
+
+
 def test_read_root():
     response = client.get("/")
     assert response.status_code == 200
@@ -154,7 +175,7 @@ def test_read_root():
 
 
 def test_api_version():
-    assert client.get("/openapi.json").json()["info"]["version"] == "4.1.0"
+    assert client.get("/openapi.json").json()["info"]["version"] == "4.2.0"
 
 
 def test_metrics_endpoint():                     # Prometheus 가 수집하는 /metrics 가 살아 있고 문서에는 숨겨져 있다
