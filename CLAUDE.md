@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-FastAPI To-Do 앱 (API 4.1.0). DB 없이 `todo.json` 파일에 저장하고, 화면은 `templates/index.html` 한 파일(바닐라 JS)을 `/` 에서 서빙한다.
+FastAPI To-Do 앱 (API 4.2.0). DB 없이 `todo.json` 파일에 저장하고, 화면은 `templates/index.html` 한 파일(바닐라 JS)을 `/` 에서 서빙한다.
 
 ## 명령어 (모두 `fastapi-app/` 에서)
 
@@ -43,7 +43,7 @@ docker exec influxdb influx -database jmeter -execute "SELECT count(*) FROM jmet
 ## 구조
 
 - `main.py` 하나에 API 전부. 모델은 `TodoIn`(입력, id 없음) → `TodoItem`(+id) → `TodoStore`(파일 전체: `next_id` + `todos`).
-- 모든 엔드포인트가 `load_store()` → 수정 → `save_store()`. 캐시·잠금 없음.
+- 모든 엔드포인트가 `with STORE_LOCK:` 안에서 `load_store()` → 수정 → `save_store()`. 캐시 없음. `save_store()` 는 `todo.json.tmp` 에 쓴 뒤 `os.replace` 로 바꿔치기한다. uvicorn 프로세스 1개 전제(`--workers` 금지).
 - 할 일 필드: `title`, `description`, `completed`, `priority`(1~4), `due_date`(`"YYYY-MM-DD"` 또는 `null`). "기한 지남" 판단은 서버가 아니라 화면이 브라우저 로컬 날짜로 한다.
 - `tests/test_main.py`: API 단위 테스트. autouse fixture 가 `main.TODO_FILE` 을 임시 파일로 바꾼다.
 - `ui_tests/`: 실행 중인 서버를 대상으로 하는 Playwright 테스트. 제목이 `[UI테스트 …]` 인 항목만 만들고 지운다.
@@ -62,6 +62,7 @@ docker exec influxdb influx -database jmeter -execute "SELECT count(*) FROM jmet
 - **`due_date` 를 그냥 `date` 로 선언** → FastAPI 는 요청 본문을 dict 로 검증해서, strict 모드에서는 올바른 `"2026-10-31"` 도 422 가 된다. `parse_iso_date` 검증기(`IsoDate`)가 필요하다. 저장도 `model_dump(mode="json")` 이어야 한다(아니면 `TypeError`).
 - **화면에서 날짜를 `Date` 로 파싱하거나 `toISOString()` 사용** → UTC 기준이라 한국에서 오전 9시 전에는 하루가 어긋난다. `"YYYY-MM-DD"` 문자열로 비교한다(`todayLocal`, `isOverdue`).
 - **편집 PUT 에서 `due_date` 를 빼먹음** → 전체 교체라 마감일이 지워지거나, 지운 마감일이 남는다. 지울 때도 `null` 을 보낸다.
+- **새 엔드포인트에서 `STORE_LOCK` 없이 `load_store()`/`save_store()` 호출, 또는 `TODO_FILE.write_text()` 로 직접 저장** → 동시 요청 때 빈 파일을 읽어 500, id 중복·누락(v4.1.0 에서 JMeter 3,000건 중 314건 실패). `test_concurrent_requests` 가 잡는다.
 - **삭제된 id 재사용 / `max(id)+1` 로 새 id 계산** → 반드시 `store.next_id` 를 쓴다.
 - **v3 목록 형식(`[...]`) 읽기 코드 삭제** → `todo.json` 이 아직 옛 형식일 수 있다. 하위 호환을 유지할 것.
 - **`httpx` 를 의존성에 추가** → 이 프로젝트는 `httpx2` 를 쓴다.

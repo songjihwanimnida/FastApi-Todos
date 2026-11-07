@@ -1,5 +1,7 @@
 import json
+import os
 import re
+import threading
 from datetime import date
 from pathlib import Path
 from typing import Annotated
@@ -16,7 +18,10 @@ INDEX_FILE = BASE_DIR / "templates" / "index.html"
 if not TODO_FILE.exists():                       # 없으면 빈 목록으로 만들어 둔다
     TODO_FILE.write_text("[]", encoding="utf-8")
 
-app = FastAPI(title="To-Do List API", version="4.1.0")
+app = FastAPI(title="To-Do List API", version="4.2.0")
+
+# 요청은 스레드풀에서 동시에 돈다 → 읽기·수정·저장을 한 번에 하나씩 (uvicorn 프로세스 1개 기준, --workers 를 늘리면 부족함)
+STORE_LOCK = threading.Lock()
 
 Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)  # Prometheus 계측
 
@@ -71,7 +76,9 @@ def load_store() -> TodoStore:
 
 def save_store(store: TodoStore) -> None:
     data = json.dumps(store.model_dump(mode="json"), indent=2, ensure_ascii=False)  # date → "YYYY-MM-DD"
-    TODO_FILE.write_text(data, encoding="utf-8")
+    tmp = TODO_FILE.with_name(TODO_FILE.name + ".tmp")  # 같은 폴더에 다 쓴 뒤 한 번에 바꿔치기
+    tmp.write_text(data, encoding="utf-8")
+    os.replace(tmp, TODO_FILE)                   # 쓰는 도중 멈춰도 todo.json 은 이전 내용 그대로 (빈 파일이 안 생김)
 
 
 NOT_FOUND = {404: {"description": "To-Do item not found"}}  # find_index 가 던지는 404
@@ -86,33 +93,37 @@ def find_index(todos: list[TodoItem], todo_id: int) -> int:
 
 @app.get("/todos")                               # 목록 조회
 def get_todos() -> list[TodoItem]:
-    return load_store().todos
+    with STORE_LOCK:                             # Windows 에서는 읽는 중인 파일을 os.replace 할 수 없다
+        return load_store().todos
 
 
 @app.post("/todos", status_code=201)             # 추가 — id 는 서버가 매긴다
 def create_todo(payload: TodoIn) -> TodoItem:
-    store = load_store()
-    todo = TodoItem(id=store.next_id, **payload.model_dump())
-    store.todos.append(todo)
-    store.next_id += 1
-    save_store(store)
+    with STORE_LOCK:                             # 두 요청이 같은 next_id 를 읽으면 id 가 겹치고 한쪽이 사라진다
+        store = load_store()
+        todo = TodoItem(id=store.next_id, **payload.model_dump())
+        store.todos.append(todo)
+        store.next_id += 1
+        save_store(store)
     return todo
 
 
 @app.put("/todos/{todo_id}", responses=NOT_FOUND)  # 수정
 def update_todo(todo_id: int, payload: TodoIn) -> TodoItem:
-    store = load_store()
-    todo = TodoItem(id=todo_id, **payload.model_dump())
-    store.todos[find_index(store.todos, todo_id)] = todo
-    save_store(store)
+    with STORE_LOCK:
+        store = load_store()
+        todo = TodoItem(id=todo_id, **payload.model_dump())
+        store.todos[find_index(store.todos, todo_id)] = todo
+        save_store(store)
     return todo
 
 
 @app.delete("/todos/{todo_id}", status_code=204, responses=NOT_FOUND)  # 삭제
 def delete_todo(todo_id: int) -> None:
-    store = load_store()
-    del store.todos[find_index(store.todos, todo_id)]
-    save_store(store)
+    with STORE_LOCK:
+        store = load_store()
+        del store.todos[find_index(store.todos, todo_id)]
+        save_store(store)
 
 
 @app.get("/", include_in_schema=False)           # 화면 서빙

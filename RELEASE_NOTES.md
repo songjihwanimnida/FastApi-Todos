@@ -1,5 +1,53 @@
 # 릴리즈 노트
 
+## v4.2.0 — 2026-11-07
+
+여러 사람이 **동시에 할 일을 추가·조회해도 오류가 나지 않도록** 저장 방식을 고쳤습니다. 부하 테스트 결과를 실시간으로 보는 **InfluxDB 모니터링**도 추가했습니다.
+
+### 고친 점
+
+**동시 요청 때 500 오류**
+- 부하 테스트(사용자 10명 × 100회, 요청 3,000건)에서 314건(10.5%)이 실패하던 문제를 고쳤습니다.
+  - 원인: 한 요청이 `todo.json`을 다시 쓰는 도중에 다른 요청이 읽으면 빈 파일을 받아 `500 Internal Server Error`가 났습니다. 그 연결로 이어진 다음 요청은 `Connection reset`으로 끊겼습니다.
+- 동시에 할 일을 추가해도 id가 겹치거나 한쪽 할 일이 사라지지 않습니다.
+- 저장 도중 앱이 멈춰도 `todo.json`이 비거나 깨지지 않고, 이전 내용이 그대로 남습니다.
+
+### 새 기능
+
+**InfluxDB 모니터링 (JMeter 결과)**
+- JMeter 부하 테스트 결과가 테스트 도중 실시간으로 InfluxDB 1.x에 저장됩니다. Grafana에서 응답 시간, 처리량, 에러율을 볼 수 있습니다.
+  - Prometheus가 15초마다 앱에서 메트릭을 가져가는 방식이라면, InfluxDB는 JMeter가 결과를 밀어 넣는 방식입니다.
+- Grafana 데이터 소스 `InfluxDB-JMeter`는 자동으로 등록됩니다. 대시보드는 Grafana에서 **5496**을 import 하세요.
+- 부하량은 실행할 때 조절합니다. 아무것도 주지 않으면 10명, 1회, 10초입니다.
+
+  ```bash
+  JMETER_THREADS=10 JMETER_LOOPS=100 docker compose run --rm jmeter
+  ```
+
+### API 변경 (개발자용)
+- 요청과 응답 모양은 바뀌지 않았습니다. API 문서(`/docs`)에 버전 `4.2.0`이 표시됩니다.
+- 쓰기 요청(추가·수정·삭제)과 목록 조회는 서버에서 한 번에 하나씩 처리됩니다. 할 일이 아주 많아지면 동시 요청의 응답이 조금 느려질 수 있습니다.
+
+### 업그레이드 참고
+- **기존 데이터는 그대로 쓸 수 있습니다.** `todo.json` 형식은 바뀌지 않았습니다.
+- **앱 이미지를 다시 빌드해야 합니다.** 코드가 이미지 안에 들어 있어서 `git pull`만으로는 반영되지 않습니다.
+
+  ```bash
+  docker cp FastApi-app2:/app/todo.json ./todo-backup.json   # 할 일을 남기려면 먼저 백업
+  docker compose up -d --build fastapi-app
+  docker cp ./todo-backup.json FastApi-app2:/app/todo.json   # 필요하면 되돌리기
+  ```
+
+  컨테이너를 다시 만들면 컨테이너 안의 `todo.json`이 이미지에 들어 있는 내용으로 돌아갑니다.
+- **InfluxDB 띄우기**: `docker compose up -d influxdb grafana`. InfluxDB는 로그인이 없어서 외부 포트를 열지 않고, 같은 Docker 네트워크 안에서만 접근합니다.
+- 앱은 uvicorn 프로세스 하나로 실행하는 것을 전제로 합니다. `--workers`로 프로세스를 늘리면 이번 수정만으로는 동시 저장을 막을 수 없습니다.
+- 리눅스 서버에서 JMeter가 `Permission denied`로 멈추면, 서버 계정 권한으로 실행하세요: `docker compose run --rm --user "$(id -u):$(id -g)" jmeter`.
+
+### 개발 환경
+- 동시 요청 단위 테스트(`test_concurrent_requests`)를 추가했습니다. 8개 스레드가 추가와 조회를 동시에 해도 500이 없고, id가 빠지거나 겹치지 않는지 검사합니다.
+- JMeter 실행 결과물(`results.jtl`, `report/`, `jmeter.log`)은 git에서 제외합니다.
+- 기능 설계 문서 `intent/influxdb/`, `intent/concurrent-save/`를 추가했습니다.
+
 ## v4.1.0 — 2026-11-04
 
 할 일에 **마감일**을 넣을 수 있게 되었고, 기한이 지났는데 끝내지 않은 일은 **"기한 지남"**으로 한눈에 보입니다. 서버 상태를 볼 수 있도록 **Prometheus·Grafana 모니터링**도 추가했습니다.
