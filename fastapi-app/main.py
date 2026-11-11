@@ -1,12 +1,15 @@
 import json
+import logging
 import os
 import re
+import sys
 import threading
+import time
 from datetime import date
 from pathlib import Path
 from typing import Annotated
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, HTTPException, Request
 from fastapi.responses import FileResponse
 from prometheus_fastapi_instrumentator import Instrumentator
 from pydantic import BaseModel, BeforeValidator, ConfigDict, Field, model_validator
@@ -24,6 +27,30 @@ app = FastAPI(title="To-Do List API", version="4.2.0")
 STORE_LOCK = threading.Lock()
 
 Instrumentator().instrument(app).expose(app, endpoint="/metrics", include_in_schema=False)  # Prometheus 계측
+
+# 액세스 로그를 stdout 으로 → Docker 컨테이너 로그 → Alloy 가 읽어 Loki 로 보낸다
+access_logger = logging.getLogger("todo.access")
+access_logger.setLevel(logging.INFO)
+if not access_logger.handlers:                   # 모듈을 다시 import 해도 핸들러가 겹쳐 두 줄씩 찍히지 않게
+    access_logger.addHandler(logging.StreamHandler(sys.stdout))
+access_logger.propagate = False                  # 상위 로거로 넘기면 같은 줄이 두 번 찍힌다
+
+# uvicorn 기본 액세스 로그는 끈다 (켜 두면 요청 1번에 2줄 → 대시보드 카운트가 2배)
+logging.getLogger("uvicorn.access").disabled = True
+
+
+@app.middleware("http")                          # 모든 요청을 한 줄씩 기록
+async def log_requests(request: Request, call_next):
+    start = time.perf_counter()
+    response = await call_next(request)
+    duration = time.perf_counter() - start
+    client = request.client.host if request.client else "-"
+    # 형식: IP - "METHOD PATH HTTP/1.1" 상태코드 응답시간 → Grafana LogQL 쿼리가 이 형식으로 파싱
+    access_logger.info(
+        f'{client} - "{request.method} {request.url.path} HTTP/1.1" '
+        f'{response.status_code} {duration:.3f}s'
+    )
+    return response
 
 ISO_DATE = re.compile(r"[0-9]{4}-[0-9]{2}-[0-9]{2}")
 
