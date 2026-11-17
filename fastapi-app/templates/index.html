@@ -14,6 +14,7 @@
     --text: #202020;
     --text-muted: #808080;
     --row-hover: #f8f8f7;
+    --sidebar: #fafafa;
     --danger: #d1453b;
     --p1: #d1453b;
     --p2: #eb8909;
@@ -31,8 +32,9 @@
     -webkit-font-smoothing: antialiased;
   }
   button { font: inherit; color: inherit; background: none; border: 0; cursor: pointer; }
-  input, textarea { font: inherit; color: inherit; }
+  input, textarea, select { font: inherit; color: inherit; }
   :focus-visible { outline: 2px solid #4b7fd6; outline-offset: 1px; border-radius: 3px; }
+  .sr-only { position: absolute; width: 1px; height: 1px; overflow: hidden; clip: rect(0 0 0 0); white-space: nowrap; }
 
   /* ---------- 레이아웃 ---------- */
   .topbar {
@@ -42,11 +44,57 @@
   }
   .topbar-title { font-weight: 600; font-size: 15px; }
 
-  .main { padding: 52px 24px 96px; }
+  .sidebar {
+    position: fixed; top: 44px; bottom: 0; left: 0; width: 230px; z-index: 20;
+    padding: 14px 10px 24px; background: var(--sidebar); border-right: 1px solid var(--border); overflow-y: auto;
+  }
+  .main { margin-left: 230px; padding: 52px 24px 96px; }
   .content { max-width: 720px; margin: 0 auto; }
-  .page-title { display: flex; align-items: baseline; gap: 10px; margin: 8px 0 18px; }
-  .page-title h1 { font-size: 20px; margin: 0; }
+  .page-title { display: flex; align-items: center; flex-wrap: wrap; gap: 4px 10px; margin: 8px 0 18px; min-height: 34px; }
+  .page-title h1 { font-size: 20px; margin: 0; overflow-wrap: anywhere; }
   .page-title .count { color: var(--text-muted); font-size: 13px; }
+  .title-actions { display: flex; gap: 2px; }
+  .view-select { display: none; }
+
+  /* ---------- 사이드바 ---------- */
+  .nav-list { list-style: none; margin: 0; padding: 0; }
+  .nav-link {
+    display: flex; align-items: center; gap: 8px; width: 100%; padding: 6px 8px; border-radius: 5px;
+    color: var(--text); text-decoration: none; text-align: left;
+  }
+  .nav-link svg { flex: none; color: var(--text-muted); }
+  .nav-link:hover { background: #eeeeee; }
+  .nav-link[aria-current="page"] { background: #ffefe5; color: var(--accent-hover); font-weight: 600; }
+  .nav-link[aria-current="page"] svg { color: var(--accent); }
+  .nav-name { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .nav-count { color: var(--text-muted); font-size: 12px; font-weight: 400; }
+  .nav-heading { margin: 18px 8px 4px; font-size: 12px; font-weight: 600; color: var(--text-muted); }
+  .nav-add { color: var(--text-muted); }
+  .nav-add:hover { color: var(--accent); }
+  .nav-form { padding: 4px 4px 0; }
+  .nav-form input {
+    width: 100%; border: 1px solid #dedede; border-radius: 5px; padding: 5px 8px; background: #fff;
+  }
+  .nav-form input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  .nav-form .card-actions { margin-top: 6px; }
+  .nav-form .btn { padding: 5px 10px; font-size: 12px; }
+
+  /* ---------- 도구 막대 ---------- */
+  .toolbar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 0 0 10px; }
+  .search {
+    flex: 1 1 220px; display: flex; align-items: center; gap: 6px; padding: 4px 8px;
+    border: 1px solid #dedede; border-radius: 6px; color: var(--text-muted); background: #fff;
+  }
+  .search:focus-within { border-color: #4b7fd6; }
+  .search input { flex: 1; min-width: 0; border: 0; outline: none; background: none; font-size: 13px; color: var(--text); }
+  .select {
+    font-size: 12px; color: var(--text); background: #fff;
+    border: 1px solid #dedede; border-radius: 6px; padding: 5px 6px;
+  }
+  .select:disabled { color: #b0b0b0; background: #f7f7f7; }
+  .link-btn { font-size: 12px; color: var(--accent); padding: 5px 6px; border-radius: 5px; }
+  .link-btn:hover { background: #fdf0ee; }
+  .link-btn[hidden] { display: none; }
 
   /* ---------- 할 일 목록 ---------- */
   .list { list-style: none; margin: 0; padding: 0; }
@@ -80,9 +128,22 @@
   .task[data-done="true"] .prio-tag { color: var(--text-muted); }
   .task-meta { display: flex; flex-wrap: wrap; align-items: center; gap: 2px 10px; margin-top: 3px; }
   .task-meta .prio-tag { margin-top: 0; }
-  .due-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-muted); }
+  .due-tag, .repeat-tag, .project-tag { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; color: var(--text-muted); }
+  .project-tag span { max-width: 160px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   /* 기한 지남 — 우선순위 1 과 같은 빨강이라 "기한 지남" 글자로도 구분한다 */
   .due-tag[data-overdue="true"] { color: var(--danger); font-weight: 600; }
+  .sub-toggle {
+    display: inline-flex; align-items: center; gap: 3px; margin-left: -4px; padding: 0 4px;
+    border-radius: 4px; font-size: 12px; color: var(--text-muted);
+  }
+  .sub-toggle:hover { background: #ececec; color: var(--text); }
+  .sub-toggle .chev { transition: transform .15s; transform: rotate(-90deg); }
+  .sub-toggle[aria-expanded="true"] .chev { transform: none; }
+  .subtasks { list-style: none; margin: 6px 0 0; padding: 0; }
+  .subtask { display: flex; align-items: center; gap: 8px; padding: 3px 0; font-size: 13px; }
+  .subtask .check { width: 16px; height: 16px; margin: 0; }
+  .subtask-title { overflow-wrap: anywhere; }
+  .subtask[data-done="true"] .subtask-title { color: var(--text-muted); text-decoration: line-through; }
   .task-actions { display: flex; gap: 2px; opacity: 0; flex: none; }
   .task:hover .task-actions, .task:focus-within .task-actions { opacity: 1; }
   .icon-btn { padding: 5px; border-radius: 4px; color: var(--text-muted); display: flex; }
@@ -90,7 +151,7 @@
   .icon-btn.danger:hover { color: var(--danger); }
 
   /* ---------- 진행률 ---------- */
-  .progress { display: flex; align-items: center; gap: 10px; margin: -8px 0 18px; }
+  .progress { display: flex; align-items: center; gap: 10px; margin: -8px 0 16px; }
   .progress[hidden] { display: none; }
   .progress-track { flex: 1; height: 6px; border-radius: 3px; background: var(--border); overflow: hidden; }
   .progress-fill { height: 100%; border-radius: 3px; background: var(--accent); transition: width .25s ease; }
@@ -128,9 +189,9 @@
   .card input::placeholder, .card textarea::placeholder { color: #a5a5a5; }
   .card input:focus, .card textarea:focus { outline: none; }
   .card-actions { display: flex; justify-content: flex-end; gap: 8px; margin-top: 10px; }
-  .card-footer { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .card-footer { display: flex; align-items: center; flex-wrap: wrap; gap: 8px 14px; margin-top: 10px; }
   .card-footer .card-actions { margin: 0 0 0 auto; }
-  .prio-group { display: flex; align-items: center; gap: 2px; }
+  .prio-group, .due-group, .opt-group { display: flex; align-items: center; gap: 2px; }
   .prio-label { font-size: 12px; color: var(--text-muted); margin-right: 4px; }
   .prio-btn {
     display: flex; align-items: center; gap: 3px; padding: 4px 7px; border-radius: 5px;
@@ -141,12 +202,20 @@
   .prio-btn[data-priority="1"] svg { color: var(--p1); }
   .prio-btn[data-priority="2"] svg { color: var(--p2); }
   .prio-btn[data-priority="3"] svg { color: var(--p3); }
-  .due-group { display: flex; align-items: center; gap: 2px; }
   .due-group input[type="date"] {
     font: inherit; font-size: 12px; color: var(--text); background: #fff;
     border: 1px solid #dedede; border-radius: 5px; padding: 3px 6px;
   }
   .due-group input[type="date"]:focus { outline: 2px solid var(--accent); outline-offset: 1px; }
+  .card .select { max-width: 180px; }
+  .sub-edit { list-style: none; margin: 6px 0 0; padding: 0; }
+  .sub-edit li { display: flex; align-items: center; gap: 6px; font-size: 12px; padding: 1px 0; }
+  .sub-edit li span { flex: 1; min-width: 0; overflow-wrap: anywhere; }
+  .sub-edit li .sub-done { color: var(--text-muted); text-decoration: line-through; }
+  .sub-edit .icon-btn { padding: 3px; }
+  .sub-new { display: flex; align-items: center; gap: 6px; margin-top: 2px; color: var(--text-muted); }
+  .card .sub-new input[type="text"] { flex: 1; font-weight: 400; font-size: 12px; }
+  .sub-new .icon-btn { padding: 3px; }
   .btn { padding: 7px 13px; border-radius: 5px; font-size: 13px; font-weight: 500; }
   .btn-primary { background: var(--accent); color: #fff; }
   .btn-primary:hover { background: var(--accent-hover); }
@@ -155,6 +224,13 @@
   .btn-ghost:hover { background: #ebebeb; }
   .btn-danger { background: var(--danger); color: #fff; }
   .btn-danger:hover { background: #b8382f; }
+  .rename { display: flex; align-items: center; gap: 6px; flex: 1; }
+  .rename input {
+    flex: 1; min-width: 0; font-size: 18px; font-weight: 700; padding: 2px 6px;
+    border: 1px solid #dedede; border-radius: 5px;
+  }
+  .rename input:focus { outline: 2px solid var(--accent); outline-offset: 0; }
+  .rename .btn { padding: 5px 10px; }
 
   /* ---------- 상태 표시 ---------- */
   .state { text-align: center; color: var(--text-muted); padding: 48px 16px; }
@@ -179,12 +255,14 @@
   dialog .card-actions { margin-top: 18px; }
 
   @media (max-width: 767px) {
-    .main { padding: 52px 16px 96px; }
+    .sidebar { display: none; }                      /* 좁은 화면은 사이드바 대신 제목 옆 선택 상자 */
+    .main { margin-left: 0; padding: 52px 16px 96px; }
+    .view-select { display: block; max-width: 100%; }
   }
   /* 터치 기기·좁은 화면에는 hover 가 없다 → 편집·삭제 버튼을 늘 보이고 누르기 쉽게 44×44px 로 */
   @media (hover: none), (max-width: 767px) {
     .task-actions { opacity: 1; }
-    .icon-btn { padding: 14px; margin: -9px 0; }   /* 음수 margin 으로 행 높이는 그대로 */
+    .task-actions .icon-btn { padding: 14px; margin: -9px 0; }   /* 음수 margin 으로 행 높이는 그대로 */
   }
 </style>
 </head>
@@ -193,17 +271,48 @@
   <span class="topbar-title">Todo</span>
 </header>
 
+<nav class="sidebar" aria-label="프로젝트 목록">
+  <ul class="nav-list" id="nav-fixed"></ul>
+  <div class="nav-heading">프로젝트</div>
+  <ul class="nav-list" id="nav-projects"></ul>
+  <div id="nav-adder"></div>
+</nav>
+
 <main class="main">
   <div class="content">
-    <div class="page-title">
-      <h1>전체</h1>
-      <span class="count" id="view-count"></span>
-    </div>
+    <select class="select view-select" id="view-select" aria-label="프로젝트 보기"></select>
+    <div class="page-title" id="page-title"></div>
     <div class="progress" id="progress" hidden>
       <div class="progress-track" id="progress-bar" role="progressbar" aria-label="완료 진행률" aria-valuemin="0">
         <div class="progress-fill" id="progress-fill"></div>
       </div>
       <span class="progress-text" id="progress-text"></span>
+    </div>
+    <div class="toolbar" role="search">
+      <label class="search">
+        <svg viewBox="0 0 24 24" width="15" height="15" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></svg>
+        <input type="search" id="search" aria-label="검색" placeholder="제목·설명 검색" maxlength="100" autocomplete="off">
+      </label>
+      <select class="select" id="filter-priority" aria-label="우선순위 필터">
+        <option value="">모든 우선순위</option>
+        <option value="1">우선순위 1</option>
+        <option value="2">우선순위 2</option>
+        <option value="3">우선순위 3</option>
+        <option value="4">우선순위 4</option>
+      </select>
+      <select class="select" id="filter-status" aria-label="상태">
+        <option value="">전체</option>
+        <option value="open">진행 중</option>
+        <option value="done">완료</option>
+        <option value="overdue">기한 지남</option>
+      </select>
+      <select class="select" id="sort" aria-label="정렬">
+        <option value="priority">우선순위</option>
+        <option value="created">추가순</option>
+        <option value="due">마감일</option>
+        <option value="title">제목</option>
+      </select>
+      <button class="link-btn" type="button" id="clear-filters" hidden>필터 지우기</button>
     </div>
     <div id="list-area" aria-live="polite"></div>
     <div class="adder" id="adder"></div>
@@ -213,10 +322,10 @@
 
 <p class="toast" id="toast" role="status" hidden></p>
 
-<dialog id="confirm-dialog">
-  <h2>할 일을 삭제할까요?</h2>
+<dialog id="confirm-dialog" aria-labelledby="confirm-title">
+  <h2 id="confirm-title"></h2>
   <p id="confirm-target"></p>
-  <p class="warn">삭제한 할 일은 복구할 수 없습니다.</p>
+  <p class="warn" id="confirm-warn"></p>
   <div class="card-actions">
     <button class="btn btn-ghost" id="confirm-cancel" autofocus>취소</button>
     <button class="btn btn-danger" id="confirm-ok">삭제</button>
@@ -233,7 +342,7 @@ function make(tag, props = {}, ...children) {
   return node;
 }
 
-function icon(path, size = 18) {
+function icon(path, size = 18, className = "") {
   const svg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
   svg.setAttribute("viewBox", "0 0 24 24");
   svg.setAttribute("width", size);
@@ -244,6 +353,7 @@ function icon(path, size = 18) {
   svg.setAttribute("stroke-linecap", "round");
   svg.setAttribute("stroke-linejoin", "round");
   svg.setAttribute("aria-hidden", "true");
+  if (className) svg.setAttribute("class", className);
   svg.innerHTML = path;
   return svg;
 }
@@ -257,16 +367,24 @@ const ICONS = {
   chevron: '<path d="m6 9 6 6 6-6"/>',
   calendar: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
   x: '<path d="M18 6 6 18M6 6l12 12"/>',
+  repeat: '<path d="m17 2 4 4-4 4"/><path d="M3 11v-1a4 4 0 0 1 4-4h14"/><path d="m7 22-4-4 4-4"/><path d="M21 13v1a4 4 0 0 1-4 4H3"/>',
+  hash: '<path d="M4 9h16M4 15h16M10 3 8 21M16 3l-2 18"/>',
+  inbox: '<path d="M22 12h-6l-2 3h-4l-2-3H2"/><path d="M5.5 5.1 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.5-6.9A2 2 0 0 0 16.8 4H7.2a2 2 0 0 0-1.7 1.1z"/>',
+  layers: '<path d="m12 2 10 5-10 5L2 7z"/><path d="m2 17 10 5 10-5"/><path d="m2 12 10 5 10-5"/>',
+  list: '<path d="M10 6h10M10 12h10M10 18h10"/><path d="m3 6 1.5 1.5L7 5M3 12l1.5 1.5L7 11M3 18l1.5 1.5L7 17"/>',
 };
 
 const PRIORITIES = [1, 2, 3, 4];                  // 1 이 가장 높다
 const PRIORITY_HINT = { 1: " (가장 높음)", 4: " (기본)" };
+const REPEAT_LABEL = { daily: "매일", weekly: "매주", monthly: "매월" };
+const SORTS = ["priority", "created", "due", "title"];
+const STATUSES = ["open", "done", "overdue"];
 const byPriority = (a, b) => a.priority - b.priority || a.id - b.id;
 
 // 마감일은 "YYYY-MM-DD" 문자열로만 다룬다 — Date 로 파싱하거나 toISOString 을 쓰면 UTC 기준이 되어 하루가 어긋난다
+const pad = (n) => String(n).padStart(2, "0");
 function todayLocal() {
   const d = new Date();
-  const pad = (n) => String(n).padStart(2, "0");
   return `${d.getFullYear()}-${pad(d.getMonth() + 1)}-${pad(d.getDate())}`;
 }
 const isOverdue = (todo, today) => !todo.completed && Boolean(todo.due_date) && todo.due_date < today;  // 당일까지는 아님
@@ -274,17 +392,99 @@ function formatDue(due) {
   const [y, m, d] = due.split("-").map(Number);
   return `${y}년 ${m}월 ${d}일`;
 }
+const isLeap = (y) => (y % 4 === 0 && y % 100 !== 0) || y % 400 === 0;
+const daysIn = (y, m) => [31, isLeap(y) ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][m - 1];
 
-// focus: 다시 그린 뒤 포커스를 돌려줄 버튼의 data-focus 값 ("check-3", "edit-3", "add")
-const state = { todos: [], editingId: null, adding: false, loading: true, failed: false, busy: false, doneOpen: false, focus: null };
+// 반복 할 일의 다음 마감일 — 서버의 next_due 와 같은 규칙 (매월은 말일로 맞춤, 9999년을 넘으면 null)
+function nextDue(due, repeat) {
+  let [y, m, d] = due.split("-").map(Number);
+  if (repeat === "monthly") {
+    [y, m] = m === 12 ? [y + 1, 1] : [y, m + 1];
+    d = Math.min(d, daysIn(y, m));
+  } else {
+    d += repeat === "daily" ? 1 : 7;
+    if (d > daysIn(y, m)) {
+      d -= daysIn(y, m);
+      [y, m] = m === 12 ? [y + 1, 1] : [y, m + 1];
+    }
+  }
+  return y > 9999 ? null : `${String(y).padStart(4, "0")}-${pad(m)}-${pad(d)}`;
+}
+
+/* ---------- 상태 ----------
+   all: 쿼리 없는 전체 목록 (사이드바 개수·진행률·삭제 개수) / todos: 지금 조건으로 받은 목록
+   view: 주소 쿼리와 같은 값 / focus: 다시 그린 뒤 포커스를 돌려줄 요소의 data-focus 값
+   *Form: 열려 있는 폼 노드 — 다시 그려도 새로 만들지 않아 입력이 지워지지 않는다 */
+const state = {
+  projects: [], all: [], todos: [], view: null,
+  loading: true, failed: false, busy: false, doneOpen: false, focus: null,
+  adding: false, editingId: null, addingProject: false, renaming: false, expanded: new Set(),
+  adderForm: null, editForm: null, projectForm: null, renameForm: null,
+};
+
+/* ---------- 보기 (주소 쿼리) ---------- */
+function readView() {                             // 주소에 남은 이상한 값은 기본값으로 (그대로 보내면 422)
+  const p = new URLSearchParams(location.search);
+  const project = p.get("project") || "";
+  return {
+    project: project === "inbox" ? "inbox" : /^[1-9][0-9]{0,8}$/.test(project) ? Number(project) : "all",
+    q: (p.get("q") || "").slice(0, 100),
+    priority: ["1", "2", "3", "4"].includes(p.get("priority")) ? p.get("priority") : "",
+    status: STATUSES.includes(p.get("status")) ? p.get("status") : "",
+    sort: SORTS.includes(p.get("sort")) ? p.get("sort") : "priority",
+  };
+}
+
+function viewQuery(view) {
+  const p = new URLSearchParams();
+  if (view.project !== "all") p.set("project", String(view.project));
+  if (view.q.trim()) p.set("q", view.q);
+  if (view.priority) p.set("priority", view.priority);
+  if (view.status) p.set("status", view.status);
+  if (view.sort !== "priority") p.set("sort", view.sort);
+  const s = p.toString();
+  return s ? `?${s}` : "";
+}
+
+function writeView(push = false) {                 // 프로젝트 이동은 뒤로 가기가 되게 push, 필터는 replace
+  const query = viewQuery(state.view);
+  if (query === location.search) return;
+  history[push ? "pushState" : "replaceState"](null, "", query || location.pathname);
+}
+
+const hasFilter = () => Boolean(state.view.q.trim() || state.view.priority || state.view.status);
+const inScope = (todo) => {
+  const p = state.view.project;
+  return p === "all" || (p === "inbox" ? todo.project_id === null : todo.project_id === p);
+};
+const currentProject = () => state.projects.find((p) => p.id === state.view.project) || null;
+
+function listQuery() {                            // GET /todos 쿼리 — 기본 보기면 "" (전체 목록을 화면에서 정렬)
+  const v = state.view;
+  const p = new URLSearchParams();
+  if (v.project === "inbox") p.set("project_id", "0");
+  else if (v.project !== "all") p.set("project_id", String(v.project));
+  if (v.q.trim()) p.set("q", v.q.trim());
+  if (v.priority) p.set("priority", v.priority);
+  if (v.status) p.set("status", v.status === "done" ? "done" : "open");  // 기한 지남은 미완료를 받아 화면이 거른다
+  if (!p.toString() && v.sort === "priority") return "";
+  p.set("sort", v.sort);
+  return p.toString();
+}
 
 /* ---------- 서버 통신 ---------- */
 async function api(url, method = "GET", body) {
   const res = await fetch(url, body
     ? { method, headers: { "Content-Type": "application/json" }, body: JSON.stringify(body) }
     : { method });
-  if (!res.ok) throw new Error(String(res.status));
+  if (!res.ok) throw Object.assign(new Error(String(res.status)), { status: res.status });
   return res.status === 204 ? null : res.json();
+}
+
+// PUT 은 전체 교체 → 기존 필드를 모두 펼친 뒤 바뀐 값만 덮는다 (필드가 늘어도 빠뜨리지 않게, 하위 할 일·반복이 지워지지 않게)
+function todoBody(todo, changes) {
+  const { id, ...fields } = todo;
+  return { ...fields, ...changes };
 }
 
 let toastTimer;
@@ -303,28 +503,42 @@ async function run(what, job) {
     await job();
     return true;
   } catch (e) {
-    toast(`${what}에 실패했습니다. (${e.message})`);
+    toast(e.status === 409 ? "같은 이름의 프로젝트가 있습니다." : `${what}에 실패했습니다. (${e.message})`);
     return false;
   } finally {
     state.busy = false;
   }
 }
 
+let loadSeq = 0;
 async function load() {
+  const seq = ++loadSeq;
+  const query = listQuery();
   try {
-    state.todos = await api("/todos");
+    const [projects, all, list] = await Promise.all([
+      api("/projects"), api("/todos"), query ? api(`/todos?${query}`) : null,
+    ]);
+    if (seq !== loadSeq) return;                  // 검색어를 바꾸는 사이 늦게 도착한 옛 응답은 버린다
+    if (typeof state.view.project === "number" && !projects.some((p) => p.id === state.view.project)) {
+      state.view.project = "all";                 // 지워진 프로젝트를 보고 있었다
+      writeView();
+      return load();
+    }
+    state.projects = projects;
+    state.all = all;
+    state.todos = list || [...all].sort(byPriority);
     state.failed = false;
   } catch {
+    if (seq !== loadSeq) return;
     state.failed = true;
-  } finally {
-    state.loading = false;
-    render();
   }
+  state.loading = false;
+  render();
 }
 
 /* ---------- 렌더링 ---------- */
 function render() {
-  renderProgress(); renderList(); renderAdder();
+  renderNav(); renderTitle(); renderProgress(); renderList(); renderAdder();
   if (state.focus) queueMicrotask(restoreFocus);  // 편집 카드의 자동 포커스(microtask)보다 나중에 실행
 }
 
@@ -337,13 +551,148 @@ function restoreFocus() {
   (closed ? closed.querySelector("summary") : target).focus();
 }
 
+function goProject(key) {
+  if (state.view.project === key) return;
+  Object.assign(state, { editingId: null, editForm: null, adderForm: null, renaming: false, renameForm: null, focus: `nav-${key}` });
+  state.view.project = key;
+  writeView(true);
+  render();                                       // 제목·사이드바는 바로, 목록은 응답이 오면
+  load();
+}
+
+function navLink(key, label, iconPath, count) {
+  const link = make("a", { className: "nav-link", href: viewQuery({ ...state.view, project: key }) || location.pathname },
+    icon(iconPath, 16),
+    make("span", { className: "nav-name", textContent: label }),
+    count ? make("span", { className: "sr-only", textContent: ", 진행 중" }) : null,
+    count ? make("span", { className: "nav-count", textContent: String(count) }) : null,
+  );
+  link.dataset.focus = `nav-${key}`;
+  if (state.view.project === key) link.setAttribute("aria-current", "page");
+  link.onclick = (e) => {
+    if (e.ctrlKey || e.metaKey || e.shiftKey) return;   // 새 탭으로 열기는 그대로
+    e.preventDefault();
+    goProject(key);
+  };
+  return make("li", {}, link);
+}
+
+function renderNav() {
+  const open = state.all.filter((t) => !t.completed);
+  $("nav-fixed").replaceChildren(
+    navLink("all", "전체", ICONS.layers, open.length),
+    navLink("inbox", "수집함", ICONS.inbox, open.filter((t) => t.project_id === null).length),
+  );
+  $("nav-projects").replaceChildren(...state.projects.map((p) =>
+    navLink(p.id, p.name, ICONS.hash, open.filter((t) => t.project_id === p.id).length)));
+  $("nav-adder").replaceChildren(state.addingProject ? (state.projectForm ||= projectForm()) : projectAddButton());
+
+  const select = $("view-select");                // 좁은 화면용
+  select.replaceChildren(
+    make("option", { value: "all", textContent: "전체" }),
+    make("option", { value: "inbox", textContent: "수집함" }),
+    ...state.projects.map((p) => make("option", { value: String(p.id), textContent: p.name })),
+  );
+  select.value = String(state.view.project);
+}
+
+function projectAddButton() {
+  const button = make("button", { className: "nav-link nav-add", type: "button" },
+    icon(ICONS.plus, 16), make("span", { textContent: "프로젝트 추가" }));
+  button.dataset.focus = "project-add";
+  button.onclick = () => { state.addingProject = true; renderNav(); };
+  return button;
+}
+
+function projectForm() {
+  const input = make("input", { type: "text", maxLength: 30, placeholder: "프로젝트 이름" });
+  input.setAttribute("aria-label", "새 프로젝트 이름");
+  const cancel = make("button", { className: "btn btn-ghost", type: "button", textContent: "취소" });
+  cancel.setAttribute("aria-label", "새 프로젝트 취소");
+  const ok = make("button", { className: "btn btn-primary", type: "submit", textContent: "만들기" });
+  const form = make("form", { className: "nav-form" }, input, make("div", { className: "card-actions" }, cancel, ok));
+  const close = () => {
+    Object.assign(state, { addingProject: false, projectForm: null, focus: "project-add" });
+    render();
+  };
+  cancel.onclick = close;
+  form.onkeydown = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    let created;
+    const ok = await run("프로젝트 추가", async () => { created = await api("/projects", "POST", { name }); });
+    if (!ok) { input.focus(); return; }
+    Object.assign(state, { addingProject: false, projectForm: null });
+    state.view.project = null;                    // goProject 가 같은 값이라고 건너뛰지 않게
+    goProject(created.id);
+  };
+  queueMicrotask(() => input.focus());
+  return form;
+}
+
+function renderTitle() {
+  const box = $("page-title");
+  const project = currentProject();
+  const name = state.view.project === "inbox" ? "수집함" : project ? project.name : "전체";
+  document.title = name === "전체" ? "Todo" : `${name} - Todo`;
+
+  if (project && state.renaming) {
+    if (!state.renameForm) state.renameForm = renameForm(project);
+    if (box.firstChild !== state.renameForm) box.replaceChildren(state.renameForm);
+    return;
+  }
+  state.renameForm = null;
+  const count = state.loading || state.failed ? "" : `${state.all.filter(inScope).length}개`;
+  let actions = null;
+  if (project) {
+    const rename = make("button", { className: "icon-btn", type: "button", title: "이름 바꾸기" }, icon(ICONS.edit, 16));
+    rename.setAttribute("aria-label", "프로젝트 이름 바꾸기");
+    rename.dataset.focus = "rename";
+    rename.onclick = () => { state.renaming = true; renderTitle(); };
+    const del = make("button", { className: "icon-btn danger", type: "button", title: "프로젝트 삭제" }, icon(ICONS.trash, 16));
+    del.setAttribute("aria-label", "프로젝트 삭제");
+    del.onclick = () => askDeleteProject(project, del);
+    actions = make("span", { className: "title-actions" }, rename, del);
+  }
+  box.replaceChildren(...[make("h1", { textContent: name }), make("span", { className: "count", textContent: count }), actions].filter(Boolean));  // null 을 넘기면 "null" 글자가 찍힌다
+}
+
+function renameForm(project) {
+  const input = make("input", { type: "text", value: project.name, maxLength: 30 });
+  input.setAttribute("aria-label", "프로젝트 이름");
+  const save = make("button", { className: "btn btn-primary", type: "submit", textContent: "저장" });
+  save.setAttribute("aria-label", "이름 저장");
+  const cancel = make("button", { className: "btn btn-ghost", type: "button", textContent: "취소" });
+  cancel.setAttribute("aria-label", "이름 변경 취소");
+  const form = make("form", { className: "rename" }, input, save, cancel);
+  const close = () => {
+    Object.assign(state, { renaming: false, renameForm: null, focus: "rename" });
+    render();
+  };
+  cancel.onclick = close;
+  form.onkeydown = (e) => { if (e.key === "Escape") { e.preventDefault(); close(); } };
+  form.onsubmit = async (e) => {
+    e.preventDefault();
+    const name = input.value.trim();
+    if (!name) { input.focus(); return; }
+    const ok = await run("이름 변경", () => api(`/projects/${project.id}`, "PUT", { name }));
+    if (!ok) { input.focus(); return; }
+    Object.assign(state, { renaming: false, renameForm: null, focus: "rename" });
+    await load();
+  };
+  queueMicrotask(() => { input.focus(); input.select(); });
+  return form;
+}
+
 function renderProgress() {
-  const total = state.todos.length;
-  $("view-count").textContent = state.loading || state.failed ? "" : `${total}개`;
+  const scope = state.all.filter(inScope);        // 검색·필터와 상관없이 고른 프로젝트 전체 기준
+  const total = scope.length;
   $("progress").hidden = state.loading || state.failed || total === 0;
   if ($("progress").hidden) return;
 
-  const done = state.todos.filter((t) => t.completed).length;
+  const done = scope.filter((t) => t.completed).length;
   const pct = Math.round((done / total) * 100);
   $("progress-fill").style.width = `${pct}%`;
   $("progress-text").textContent = `${done}/${total} 완료 (${pct}%)`;
@@ -355,6 +704,7 @@ function renderProgress() {
 function renderList() {
   const area = $("list-area");
   $("done-area").replaceChildren();
+  syncToolbar();
 
   if (state.loading) {
     area.replaceChildren(stateBlock("불러오는 중…"));
@@ -367,13 +717,26 @@ function renderList() {
     return;
   }
 
-  if (!state.todos.length) {
+  const status = state.view.status;
+  let items = state.todos.filter(inScope);        // 프로젝트를 막 바꿔 응답을 기다리는 동안에도 다른 프로젝트 것은 숨긴다
+  if (status === "overdue") items = items.filter((t) => isOverdue(t, todayLocal()));
+
+  if (!hasFilter() && !state.all.some(inScope)) {
     area.replaceChildren(stateBlock("할 일이 없습니다", "아래에서 새 할 일을 추가해 보세요."));
+    return;
+  }
+  if (!items.length) {
+    area.replaceChildren(hasFilter()
+      ? stateBlock("조건에 맞는 할 일이 없습니다", "검색어나 필터를 바꿔 보세요.", clearFiltersButton())
+      : stateBlock("불러오는 중…"));             // 프로젝트를 막 바꿔 새 목록을 기다리는 중
+    return;
+  }
+  if (status === "done") {                        // 완료만 보기: 접이식 섹션 없이 바로
+    area.replaceChildren(make("ul", { className: "list" }, ...items.map(taskRow)));
     return;
   }
 
   // 완료한 항목은 "할 일 추가" 아래 접이식 섹션으로 뺀다
-  const items = [...state.todos].sort(byPriority);
   const open = items.filter((t) => !t.completed);
   const done = items.filter((t) => t.completed);
   area.replaceChildren(open.length
@@ -403,21 +766,32 @@ function stateBlock(heading, text, extra) {
   );
 }
 
+/* ---------- 할 일 행 ---------- */
 function taskRow(todo) {
   if (state.editingId === todo.id) {
-    return make("li", { className: "task", style: "border:0;padding:4px 0" }, editorCard({
+    state.editForm ||= editorCard({
       title: todo.title,
       description: todo.description,
       priority: todo.priority,
       dueDate: todo.due_date,
+      projectId: todo.project_id,
+      repeat: todo.repeat,
+      subtasks: todo.subtasks,
       submitLabel: "저장",
-      onCancel: () => { state.editingId = null; state.focus = `edit-${todo.id}`; render(); },
+      onCancel: () => {
+        Object.assign(state, { editingId: null, editForm: null, focus: `edit-${todo.id}` });
+        render();
+      },
       onSubmit: async (values) => {
-        const ok = await run("수정", () => api(`/todos/${todo.id}`, "PUT", { ...todo, ...values, completed: todo.completed }));
-        if (ok) { state.editingId = null; state.focus = `edit-${todo.id}`; await load(); }
+        const ok = await run("수정", () => api(`/todos/${todo.id}`, "PUT", todoBody(todo, values)));
+        if (ok) {
+          Object.assign(state, { editingId: null, editForm: null, focus: `edit-${todo.id}` });
+          await load();
+        }
         return ok;
       },
-    }));
+    });
+    return make("li", { className: "task", style: "border:0;padding:4px 0" }, state.editForm);
   }
 
   const check = make("button", { className: "check", type: "button", role: "checkbox" }, icon(ICONS.check, 14));
@@ -430,21 +804,45 @@ function taskRow(todo) {
   check.setAttribute("aria-label", `${prioLabel}${overdueLabel}${todo.title} ${todo.completed ? "완료 취소" : "완료"}`);
   check.onclick = async () => {
     check.disabled = true;
+    // 서버가 다음 회차를 만든다 (update_todo) — 알림에 쓸 날짜만 화면에서 같은 규칙으로 계산
+    const upcoming = !todo.completed && todo.repeat && todo.due_date ? nextDue(todo.due_date, todo.repeat) : null;
     const ok = await run(todo.completed ? "완료 취소" : "완료 처리",
-      () => api(`/todos/${todo.id}`, "PUT", { ...todo, completed: !todo.completed }));
-    if (ok) { state.focus = `check-${todo.id}`; await load(); }
-    else check.disabled = false;
+      () => api(`/todos/${todo.id}`, "PUT", todoBody(todo, { completed: !todo.completed })));
+    if (!ok) { check.disabled = false; return; }
+    state.focus = `check-${todo.id}`;
+    await load();
+    if (upcoming) toast(`다음 회차를 ${formatDue(upcoming)}로 만들었습니다.`);
   };
 
   const edit = make("button", { className: "icon-btn", type: "button", title: "편집" }, icon(ICONS.edit, 16));
   edit.dataset.focus = `edit-${todo.id}`;
   edit.setAttribute("aria-label", `${todo.title} 편집`);
-  edit.onclick = () => { state.editingId = todo.id; state.adding = false; render(); };
+  edit.onclick = () => {
+    Object.assign(state, { editingId: todo.id, editForm: null, adding: false });
+    render();
+  };
 
   const del = make("button", { className: "icon-btn danger", type: "button", title: "삭제" }, icon(ICONS.trash, 16));
   del.setAttribute("aria-label", `${todo.title} 삭제`);
-  del.onclick = () => askDelete(todo, del);
+  del.onclick = () => askDeleteTodo(todo, del);
 
+  const subtasks = todo.subtasks || [];
+  const expanded = subtasks.length > 0 && state.expanded.has(todo.id);
+  const row = make("li", { className: "task" },
+    check,
+    make("div", { className: "task-body" },
+      make("div", { className: "task-title", textContent: todo.title }),
+      todo.description ? make("div", { className: "task-desc", textContent: todo.description }) : null,
+      make("div", { className: "task-meta" }, ...taskMeta(todo, overdue)),
+      expanded ? subtaskList(todo) : null,
+    ),
+    make("div", { className: "task-actions" }, edit, del),
+  );
+  row.dataset.done = String(todo.completed);
+  return row;
+}
+
+function taskMeta(todo, overdue) {
   const prioTag = make("span", { className: "prio-tag" },
     icon(ICONS.flag, 12),
     make("span", { textContent: `우선순위 ${todo.priority}` }),
@@ -461,17 +859,56 @@ function taskRow(todo) {
     if (overdue) dueTag.dataset.overdue = "true";
   }
 
-  const row = make("li", { className: "task" },
-    check,
-    make("div", { className: "task-body" },
-      make("div", { className: "task-title", textContent: todo.title }),
-      todo.description ? make("div", { className: "task-desc", textContent: todo.description }) : null,
-      make("div", { className: "task-meta" }, prioTag, dueTag),
-    ),
-    make("div", { className: "task-actions" }, edit, del),
-  );
-  row.dataset.done = String(todo.completed);
-  return row;
+  const repeatTag = todo.repeat && !todo.completed
+    ? make("span", { className: "repeat-tag" }, icon(ICONS.repeat, 12), make("span", { textContent: REPEAT_LABEL[todo.repeat] }))
+    : null;
+
+  const project = state.view.project === "all" && todo.project_id !== null
+    ? state.projects.find((p) => p.id === todo.project_id) : null;
+  const projectTag = project
+    ? make("span", { className: "project-tag" }, icon(ICONS.hash, 12), make("span", { textContent: project.name }))
+    : null;
+
+  let subToggle = null;
+  const subtasks = todo.subtasks || [];
+  if (subtasks.length) {
+    const done = subtasks.filter((s) => s.completed).length;
+    subToggle = make("button", { className: "sub-toggle", type: "button" },
+      icon(ICONS.chevron, 12, "chev"),
+      icon(ICONS.list, 12),
+      make("span", { className: "sub-count", textContent: `${done}/${subtasks.length}` }),
+    );
+    subToggle.setAttribute("aria-expanded", String(state.expanded.has(todo.id)));
+    subToggle.setAttribute("aria-label", `${todo.title} 하위 할 일 보기 (${subtasks.length}개 중 ${done}개 완료)`);
+    subToggle.dataset.focus = `subs-${todo.id}`;
+    subToggle.onclick = () => {
+      if (!state.expanded.delete(todo.id)) state.expanded.add(todo.id);
+      state.focus = `subs-${todo.id}`;
+      render();
+    };
+  }
+  return [prioTag, dueTag, repeatTag, projectTag, subToggle];
+}
+
+function subtaskList(todo) {
+  return make("ul", { className: "subtasks" }, ...todo.subtasks.map((sub, i) => {
+    const check = make("button", { className: "check", type: "button", role: "checkbox" }, icon(ICONS.check, 12));
+    check.setAttribute("aria-checked", String(sub.completed));
+    check.setAttribute("aria-label", `하위 할 일 ${sub.title} ${sub.completed ? "완료 취소" : "완료"}`);
+    check.dataset.focus = `sub-${todo.id}-${i}`;
+    check.onclick = async () => {
+      check.disabled = true;
+      const subtasks = todo.subtasks.map((s, j) => (j === i ? { ...s, completed: !s.completed } : s));
+      // completed 는 그대로 보낸다 → 반복 할 일이어도 다음 회차가 생기지 않는다
+      const ok = await run("하위 할 일 체크", () => api(`/todos/${todo.id}`, "PUT", todoBody(todo, { subtasks })));
+      if (!ok) { check.disabled = false; return; }
+      state.focus = `sub-${todo.id}-${i}`;
+      await load();
+    };
+    const item = make("li", { className: "subtask" }, check, make("span", { className: "subtask-title", textContent: sub.title }));
+    item.dataset.done = String(sub.completed);
+    return item;
+  }));
 }
 
 /* ---------- 추가 / 편집 폼 ---------- */
@@ -483,31 +920,41 @@ function renderAdder() {
   }
 
   if (!state.adding) {
+    state.adderForm = null;
     const trigger = make("button", { className: "add-trigger", type: "button" },
       make("span", { className: "plus" }, icon(ICONS.plus, 14)),
       make("span", { textContent: "할 일 추가" }),
     );
     trigger.dataset.focus = "add";
-    trigger.onclick = () => { state.adding = true; state.editingId = null; render(); };
+    trigger.onclick = () => {
+      Object.assign(state, { adding: true, editingId: null, editForm: null });
+      render();
+    };
     box.replaceChildren(trigger);
     return;
   }
 
-  box.replaceChildren(editorCard({
+  state.adderForm ||= editorCard({
     title: "",
     description: "",
+    projectId: typeof state.view.project === "number" ? state.view.project : null,  // 보고 있는 프로젝트에 추가
     submitLabel: "할 일 추가",
     keepOpen: true,
-    onCancel: () => { state.adding = false; state.focus = "add"; render(); },
+    onCancel: () => {
+      Object.assign(state, { adding: false, adderForm: null, focus: "add" });
+      render();
+    },
     onSubmit: async (values) => {
       const ok = await run("추가", () => api("/todos", "POST", values));
       if (ok) await load();
       return ok;
     },
-  }));
+  });
+  if (box.firstChild !== state.adderForm) box.replaceChildren(state.adderForm);
 }
 
-function editorCard({ title, description, priority = 4, dueDate = null, submitLabel, keepOpen = false, onSubmit, onCancel }) {
+function editorCard({ title, description, priority = 4, dueDate = null, projectId = null, repeat = null, subtasks = [],
+                      submitLabel, keepOpen = false, onSubmit, onCancel }) {
   const titleInput = make("input", { type: "text", value: title, placeholder: "할 일 이름", maxLength: 100 });
   titleInput.setAttribute("aria-label", "할 일 이름");
   const descInput = make("textarea", { value: description || "", placeholder: "설명", rows: 1 });
@@ -539,16 +986,67 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
   );
   prioGroup.setAttribute("aria-label", "우선순위 (1이 가장 높음)");
 
+  // 반복은 마감일이 있어야 한다 (서버는 422) → 마감일이 비면 미리 끄고 "안 함"으로
+  const repeatSelect = make("select", { className: "select" },
+    ...[["", "반복 안 함"], ["daily", "매일"], ["weekly", "매주"], ["monthly", "매월"]]
+      .map(([value, label]) => make("option", { value, textContent: label })));
+  repeatSelect.setAttribute("aria-label", "반복");
+  repeatSelect.value = repeat || "";
+
   const dueInput = make("input", { type: "date", value: dueDate || "" });
   dueInput.setAttribute("aria-label", "마감일");
+  const syncRepeat = () => {
+    repeatSelect.disabled = !dueInput.value;
+    if (!dueInput.value) repeatSelect.value = "";
+  };
+  dueInput.addEventListener("input", syncRepeat);
+  dueInput.addEventListener("change", syncRepeat);
+  syncRepeat();
   const dueClear = make("button", { className: "icon-btn", type: "button", title: "마감일 지우기" }, icon(ICONS.x, 14));
   dueClear.setAttribute("aria-label", "마감일 지우기");
-  dueClear.onclick = () => { dueInput.value = ""; dueInput.focus(); };
+  dueClear.onclick = () => { dueInput.value = ""; syncRepeat(); dueInput.focus(); };
   const dueGroup = make("div", { className: "due-group" },
     make("span", { className: "prio-label", textContent: "마감일" }),
     dueInput,
     dueClear,
   );
+
+  const projectSelect = make("select", { className: "select" },
+    make("option", { value: "", textContent: "수집함" }),
+    ...state.projects.map((p) => make("option", { value: String(p.id), textContent: p.name })));
+  projectSelect.setAttribute("aria-label", "프로젝트");
+  projectSelect.value = projectId === null ? "" : String(projectId);
+  if (projectSelect.selectedIndex < 0) projectSelect.value = "";   // 지워진 프로젝트
+
+  // 하위 할 일 — 폼 안에서만 고치고 제출할 때 목록째 보낸다 (완료 여부는 유지)
+  let subs = subtasks.map((s) => ({ title: s.title, completed: s.completed }));
+  const subList = make("ul", { className: "sub-edit" });
+  const subInput = make("input", { type: "text", placeholder: "하위 할 일", maxLength: 100 });
+  subInput.setAttribute("aria-label", "새 하위 할 일");
+  const subAdd = make("button", { className: "icon-btn", type: "button", title: "하위 항목 추가" }, icon(ICONS.plus, 14));
+  subAdd.setAttribute("aria-label", "하위 항목 추가");   // "할 일 추가" 가 들어가면 기존 UI 테스트 로케이터와 겹친다
+  const drawSubs = () => subList.replaceChildren(...subs.map((s, i) => {
+    const remove = make("button", { className: "icon-btn", type: "button", title: "삭제" }, icon(ICONS.x, 12));
+    remove.setAttribute("aria-label", `하위 할 일 ${s.title} 빼기`);
+    remove.onclick = () => { subs.splice(i, 1); drawSubs(); subInput.focus(); };
+    return make("li", {}, make("span", { className: s.completed ? "sub-done" : "", textContent: s.title }), remove);
+  }));
+  const addSub = () => {
+    const value = subInput.value.trim();
+    if (!value) return true;
+    if (subs.length >= 50) { toast("하위 할 일은 50개까지 넣을 수 있습니다."); return false; }
+    subs.push({ title: value, completed: false });
+    subInput.value = "";
+    drawSubs();
+    return true;
+  };
+  subInput.onkeydown = (e) => {                    // 이 칸의 Enter 는 폼 제출이 아니라 하위 할 일 추가
+    if (e.key !== "Enter") return;
+    e.preventDefault();
+    if (!e.isComposing) addSub();                  // 한글 조합 중 Enter 는 글자 확정만
+  };
+  subAdd.onclick = () => { addSub(); subInput.focus(); };
+  drawSubs();
 
   const submit = make("button", { className: "btn btn-primary", type: "submit", textContent: submitLabel, disabled: !title.trim() });
   const cancel = make("button", { className: "btn btn-ghost", type: "button", textContent: "취소" });
@@ -564,9 +1062,13 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
   const form = make("form", { className: "card" },
     titleInput,
     descInput,
+    subList,
+    make("div", { className: "sub-new" }, icon(ICONS.list, 14), subInput, subAdd),
     make("div", { className: "card-footer" },
       prioGroup,
       dueGroup,
+      make("div", { className: "opt-group" }, icon(ICONS.repeat, 14), repeatSelect),
+      make("div", { className: "opt-group" }, icon(ICONS.hash, 14), projectSelect),
       make("div", { className: "card-actions" }, cancel, submit),
     ),
   );
@@ -588,6 +1090,7 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
       dueInput.focus();
       return;
     }
+    if (!addSub()) { subInput.focus(); return; }   // 칸에 적어 두고 추가를 안 누른 하위 할 일도 넣는다
 
     submit.disabled = true;
     cancel.disabled = true;
@@ -596,13 +1099,19 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
       description: descInput.value.trim(),
       priority: currentPriority,
       due_date: dueInput.value || null,            // PUT 은 전체 교체라 지운 마감일도 null 로 꼭 보낸다
+      repeat: repeatSelect.value || null,
+      project_id: projectSelect.value ? Number(projectSelect.value) : null,
+      subtasks: subs,
     });
     if (!ok) { submit.disabled = false; cancel.disabled = false; return; }
     if (keepOpen) {
-      // 연속 등록: 입력만 비우고 폼은 열어 둔다
+      // 연속 등록: 입력만 비우고 폼은 열어 둔다 (프로젝트는 그대로)
       titleInput.value = "";
       descInput.value = "";
       dueInput.value = "";
+      syncRepeat();
+      subs = [];
+      drawSubs();
       setPriority(4);
       autoGrow();
       submit.disabled = true;
@@ -615,34 +1124,110 @@ function editorCard({ title, description, priority = 4, dueDate = null, submitLa
   return form;
 }
 
+/* ---------- 도구 막대 (검색·필터·정렬) ---------- */
+let searchTimer;
+function syncToolbar(withSearch = false) {        // 입력 중인 검색칸은 덮어쓰지 않는다
+  const v = state.view;
+  if (withSearch) $("search").value = v.q;
+  $("filter-priority").value = v.priority;
+  $("filter-status").value = v.status;
+  $("sort").value = v.sort;
+  $("clear-filters").hidden = !hasFilter() && v.sort === "priority";
+}
+
+function setView(changes) {
+  Object.assign(state.view, changes);
+  writeView();
+  syncToolbar();
+  load();
+}
+
+function clearFilters() {
+  clearTimeout(searchTimer);
+  Object.assign(state.view, { q: "", priority: "", status: "", sort: "priority" });
+  writeView();
+  syncToolbar(true);
+  $("search").focus();                            // 누른 버튼이 사라지므로 검색칸으로
+  load();
+}
+
+function clearFiltersButton() {
+  const button = make("button", { className: "btn btn-ghost", type: "button", textContent: "필터 지우기" });
+  button.onclick = clearFilters;
+  return button;
+}
+
+$("search").oninput = () => {                     // 글자마다 요청하지 않도록 250ms 기다린다
+  clearTimeout(searchTimer);
+  searchTimer = setTimeout(() => setView({ q: $("search").value }), 250);
+};
+$("filter-priority").onchange = (e) => setView({ priority: e.target.value });
+$("filter-status").onchange = (e) => setView({ status: e.target.value });
+$("sort").onchange = (e) => setView({ sort: e.target.value });
+$("clear-filters").onclick = clearFilters;
+$("view-select").onchange = (e) => {
+  const value = e.target.value;
+  goProject(value === "all" || value === "inbox" ? value : Number(value));
+};
+
 /* ---------- 삭제 확인 ---------- */
 const dialog = $("confirm-dialog");
-let deleteTarget = null;
-let deleteOpener = null;
+let confirmAction = null;
+let confirmOpener = null;
 
-function askDelete(todo, opener) {
-  deleteTarget = todo;
-  deleteOpener = opener;
-  $("confirm-target").textContent = `"${todo.title}"`;
+function askConfirm({ heading, target, warn, opener, onOk }) {
+  $("confirm-title").textContent = heading;
+  $("confirm-target").textContent = target;
+  $("confirm-warn").textContent = warn;
+  confirmAction = onOk;
+  confirmOpener = opener;
   dialog.showModal();
+}
+
+function askDeleteTodo(todo, opener) {
+  askConfirm({
+    heading: "할 일을 삭제할까요?",
+    target: `"${todo.title}"`,
+    warn: "삭제한 할 일은 복구할 수 없습니다.",
+    opener,
+    onOk: async () => {
+      const ok = await run("삭제", () => api(`/todos/${todo.id}`, "DELETE"));
+      if (!ok) return;
+      if (state.editingId === todo.id) Object.assign(state, { editingId: null, editForm: null });
+      state.focus = "add";                        // 누른 삭제 버튼이 사라졌으니 "할 일 추가" 로
+      await load();
+    },
+  });
+}
+
+function askDeleteProject(project, opener) {
+  const count = state.all.filter((t) => t.project_id === project.id).length;
+  askConfirm({
+    heading: "프로젝트를 삭제할까요?",
+    target: count ? `"${project.name}" 프로젝트와 할 일 ${count}개가 삭제됩니다.` : `"${project.name}" 프로젝트가 삭제됩니다.`,
+    warn: "삭제한 프로젝트와 할 일은 복구할 수 없습니다.",
+    opener,
+    onOk: async () => {
+      const ok = await run("프로젝트 삭제", () => api(`/projects/${project.id}`, "DELETE"));
+      if (!ok) return;
+      state.view.project = "all";
+      Object.assign(state, { adderForm: null, editingId: null, editForm: null, focus: "add" });
+      writeView(true);
+      await load();
+    },
+  });
 }
 
 $("confirm-cancel").onclick = () => dialog.close();
 $("confirm-ok").onclick = async () => {
-  const todo = deleteTarget;
+  const action = confirmAction;
   dialog.close();
-  if (!todo) return;
-  const ok = await run("삭제", () => api(`/todos/${todo.id}`, "DELETE"));
-  if (ok) {
-    if (state.editingId === todo.id) state.editingId = null;
-    state.focus = "add";                              // 누른 삭제 버튼이 사라졌으니 "할 일 추가" 로
-    await load();
-  }
+  if (action) await action();
 };
 dialog.addEventListener("close", () => {
-  if (deleteOpener && deleteOpener.isConnected) deleteOpener.focus();
-  deleteTarget = null;
-  deleteOpener = null;
+  if (confirmOpener && confirmOpener.isConnected) confirmOpener.focus();
+  confirmAction = null;
+  confirmOpener = null;
 });
 
 // 자정을 넘겨 켜 둔 탭으로 돌아오면 "오늘"을 다시 계산한다 — 폼이 열려 있으면 입력이 지워지므로 건너뛴다
@@ -650,6 +1235,16 @@ document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible" && !state.adding && state.editingId === null) renderList();
 });
 
+window.addEventListener("popstate", () => {       // 뒤로 가기로 이전 프로젝트 보기
+  state.view = readView();
+  Object.assign(state, { editingId: null, editForm: null, adderForm: null, renaming: false, renameForm: null });
+  syncToolbar(true);
+  render();
+  load();
+});
+
+state.view = readView();
+syncToolbar(true);
 render();
 load();
 </script>

@@ -22,10 +22,21 @@ def seed(api, name, **fields):                  # 사전 조건은 화면 대신
     return response.json()
 
 
+def seed_project(api, name):                     # 이름은 30자까지 — TAG(14자) 뒤에 짧게
+    response = api.post("/projects", json={"name": title(name)})
+    assert response.status_code == 201
+    return response.json()
+
+
 def remove_test_todos(api):                      # 다른 사람의 데이터는 건드리지 않는다
     for todo in api.get("/todos").json():
         if todo["title"].startswith(TAG_PREFIX):
             api.delete(f"/todos/{todo['id']}")
+    projects = api.get("/projects")
+    if projects.status_code == 200:              # v4 서버에는 /projects 가 없다
+        for project in projects.json():
+            if project["name"].startswith(TAG_PREFIX):
+                api.delete(f"/projects/{project['id']}")
 
 
 @pytest.fixture(scope="session")

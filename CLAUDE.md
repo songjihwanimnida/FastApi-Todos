@@ -2,7 +2,7 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
-FastAPI To-Do 앱 (API 4.2.0). DB 없이 `todo.json` 파일에 저장하고, 화면은 `templates/index.html` 한 파일(바닐라 JS)을 `/` 에서 서빙한다.
+FastAPI To-Do 앱 (API 5.0.0). DB 없이 `todo.json` 파일에 저장하고, 화면은 `templates/index.html` 한 파일(바닐라 JS)을 `/` 에서 서빙한다.
 
 ## 명령어 (모두 `fastapi-app/` 에서)
 
@@ -42,11 +42,14 @@ docker exec influxdb influx -database jmeter -execute "SELECT count(*) FROM jmet
 
 ## 구조
 
-- `main.py` 하나에 API 전부. 모델은 `TodoIn`(입력, id 없음) → `TodoItem`(+id) → `TodoStore`(파일 전체: `next_id` + `todos`).
+- `main.py` 하나에 API 전부. 모델은 `TodoIn`(입력, id 없음) → `TodoItem`(+id) → `TodoStore`(파일 전체: `next_id` + `next_project_id` + `projects` + `todos`). 프로젝트는 `ProjectIn`/`ProjectItem`, 하위 할 일은 `SubtaskIn`(id 없음, 할 일 PUT 으로 목록째 교체).
 - 모든 엔드포인트가 `with STORE_LOCK:` 안에서 `load_store()` → 수정 → `save_store()`. 캐시 없음. `save_store()` 는 `todo.json.tmp` 에 쓴 뒤 `os.replace` 로 바꿔치기한다. uvicorn 프로세스 1개 전제(`--workers` 금지).
-- 할 일 필드: `title`, `description`, `completed`, `priority`(1~4), `due_date`(`"YYYY-MM-DD"` 또는 `null`). "기한 지남" 판단은 서버가 아니라 화면이 브라우저 로컬 날짜로 한다.
+- 할 일 필드: `title`, `description`, `completed`, `priority`(1~4), `due_date`(`"YYYY-MM-DD"` 또는 `null`), `project_id`(`null` = 수집함), `subtasks`(최대 50), `repeat`(`daily`/`weekly`/`monthly`, 마감일 필수). "기한 지남" 판단은 서버가 아니라 화면이 브라우저 로컬 날짜로 한다.
+- 반복: `update_todo` 가 잠금 안에서 "저장된 값은 미완료 → 요청은 완료"일 때만 `next_due()` 로 다음 회차를 새 id 로 만들고, 완료한 쪽의 `repeat` 는 `null` 로 바꾼다. 매월은 말일로 맞추고 원래 날짜를 기억하지 않는다(1/31 → 2/28 → 3/28). 화면의 `nextDue()` 는 알림용 복사본이라 규칙을 바꾸면 둘 다 고친다.
+- `GET /todos` 쿼리 `q`, `project_id`(0 = 수집함), `priority`, `status`(open/done), `sort`(created 기본/priority/due/title). 쿼리가 없으면 v4 와 같은 전체 목록. 프로젝트 삭제는 안의 할 일도 함께 지운다.
+- 화면(`index.html`): 보기 상태(프로젝트·검색·필터·정렬)는 주소 쿼리에 둔다(`readView`/`writeView`). `load()` 는 `/projects`, 전체 `/todos`(사이드바 개수·진행률), 조건 `/todos` 를 함께 받는다. 열린 폼은 `state.*Form` 에 두어 다시 그려도 새로 만들지 않는다.
 - `tests/test_main.py`: API 단위 테스트. autouse fixture 가 `main.TODO_FILE` 을 임시 파일로 바꾼다.
-- `ui_tests/`: 실행 중인 서버를 대상으로 하는 Playwright 테스트. 제목이 `[UI테스트 …]` 인 항목만 만들고 지운다.
+- `ui_tests/`: 실행 중인 서버를 대상으로 하는 Playwright 테스트(`test_due_date_ui.py`, `test_v5_ui.py`). 제목·이름이 `[UI테스트 …]` 인 할 일과 프로젝트만 만들고 지운다. 프로젝트 이름은 30자 제한이라 태그(14자) 뒤에 짧게.
 - 기능 문서는 `intent/<slug>/` 에 intent.md → spec.md → plan.md 순서로 쌓는다.
 - `GET /metrics`: `prometheus-fastapi-instrumentator` 가 노출하는 Prometheus 메트릭 (Swagger 문서에는 숨김).
 - `docker-compose.yml`(루트): 앱(5005→8000) + SonarQube(설정은 `sonar-project.properties`) + 모니터링(Prometheus `127.0.0.1:7070`, Grafana 3000, node-exporter, cadvisor). 수집 대상은 `prometheus/prometheus.yml`.
@@ -62,6 +65,11 @@ docker exec influxdb influx -database jmeter -execute "SELECT count(*) FROM jmet
 - **`due_date` 를 그냥 `date` 로 선언** → FastAPI 는 요청 본문을 dict 로 검증해서, strict 모드에서는 올바른 `"2026-10-31"` 도 422 가 된다. `parse_iso_date` 검증기(`IsoDate`)가 필요하다. 저장도 `model_dump(mode="json")` 이어야 한다(아니면 `TypeError`).
 - **화면에서 날짜를 `Date` 로 파싱하거나 `toISOString()` 사용** → UTC 기준이라 한국에서 오전 9시 전에는 하루가 어긋난다. `"YYYY-MM-DD"` 문자열로 비교한다(`todayLocal`, `isOverdue`).
 - **편집 PUT 에서 `due_date` 를 빼먹음** → 전체 교체라 마감일이 지워지거나, 지운 마감일이 남는다. 지울 때도 `null` 을 보낸다.
+- **화면에서 할 일 PUT 본문을 직접 만듦** → `subtasks`·`repeat`·`project_id` 하나만 빠져도 사용자가 적은 하위 할 일이 통째로 사라진다. 항상 `todoBody(todo, changes)` 로 만든다. 하위 할 일 체크는 `completed` 를 그대로 보내야 반복 회차가 생기지 않는다.
+- **반복 회차 판단을 잠금 밖에서 하거나 완료 쪽 `repeat` 를 남김** → 더블 클릭·완료 해제 후 재완료 때 회차가 중복된다. `test_repeat_concurrent_complete`, `test_repeat_uncheck_and_recheck` 가 잡는다.
+- **없는 프로젝트 확인(`check_project`)을 모델 검증기로 옮김** → 저장소를 봐야 해서 엔드포인트의 `STORE_LOCK` 안에서만 할 수 있다. 본문의 `project_id: 0` 은 422 이고, 쿼리의 `project_id=0` 은 수집함이다(의미가 다름).
+- **화면 버튼·라벨 이름에 기존 로케이터가 들어감** → Playwright `name=` 은 부분 일치라 "하위 할 일 추가" 같은 이름이 `"할 일 추가"` 를 쓰는 기존 UI 테스트를 strict 위반으로 깨뜨린다. 그래서 "하위 항목 추가", "프로젝트 삭제", "이름 저장" 같은 이름을 쓴다. 폼 선택 상자 라벨 "프로젝트" 와 겹치지 않게 사이드바는 "프로젝트 목록", 좁은 화면 선택 상자는 "프로젝트 보기".
+- **`replaceChildren(a, b, null)`** → `make()` 와 달리 `null` 을 걸러 주지 않아 화면에 "null" 글자가 찍힌다. `.filter(Boolean)` 을 붙인다.
 - **새 엔드포인트에서 `STORE_LOCK` 없이 `load_store()`/`save_store()` 호출, 또는 `TODO_FILE.write_text()` 로 직접 저장** → 동시 요청 때 빈 파일을 읽어 500, id 중복·누락(v4.1.0 에서 JMeter 3,000건 중 314건 실패). `test_concurrent_requests` 가 잡는다.
 - **삭제된 id 재사용 / `max(id)+1` 로 새 id 계산** → 반드시 `store.next_id` 를 쓴다.
 - **v3 목록 형식(`[...]`) 읽기 코드 삭제** → `todo.json` 이 아직 옛 형식일 수 있다. 하위 호환을 유지할 것.
